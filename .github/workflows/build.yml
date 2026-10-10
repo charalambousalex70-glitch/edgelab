@@ -1,0 +1,47 @@
+name: Update forecasts
+
+on:
+  schedule:
+    - cron: "0 6 * * *"      # every morning: picks up new results
+    - cron: "0 18 * * 5"     # Friday evening: weekend odds are published Friday afternoon
+    - cron: "0 15 * * 2"     # Tuesday afternoon: midweek odds
+  workflow_dispatch:          # "Run workflow" button for a manual update
+  push:                       # rebuild whenever the code or settings change
+    branches: [main]
+    paths-ignore: ["history/**", "README.md"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python build.py
+      - name: Save the prediction history
+        run: |
+          git config user.name "edgelab-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add history/predictions.csv
+          git diff --cached --quiet || (git commit -m "Log predictions" && git push)
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - id: deployment
+        uses: actions/deploy-pages@v4

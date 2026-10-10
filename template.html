@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Premier League match probabilities from the EdgeLab model, updated every week.">
+<title>EdgeLab: Premier League forecasts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  --bg:#FFFFFF; --panel:#F8FAFC; --text:#0F172A; --muted:#475569; --faint:#64748B; --line:#E2E8F0;
+  --primary:#2563EB; --home:#2563EB; --draw:#94A3B8; --away:#D97706; --pos:#047857; --neg:#BE123C;
+  --chip:#EFF6FF; --chip-text:#1E40AF; --heat:37,99,235;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#0F172A; --panel:#1E293B; --text:#F8FAFC; --muted:#CBD5E1; --faint:#94A3B8; --line:#334155;
+    --primary:#3B82F6; --home:#3B82F6; --draw:#64748B; --away:#F59E0B; --pos:#34D399; --neg:#FB7185;
+    --chip:#172554; --chip-text:#BFDBFE; --heat:96,165,250;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0F172A; --panel:#1E293B; --text:#F8FAFC; --muted:#CBD5E1; --faint:#94A3B8; --line:#334155;
+  --primary:#3B82F6; --home:#3B82F6; --draw:#64748B; --away:#F59E0B; --pos:#34D399; --neg:#FB7185;
+  --chip:#172554; --chip-text:#BFDBFE; --heat:96,165,250;
+}
+html { scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 7rem); }
+*, *::before, *::after { box-sizing: inherit; }
+body { margin:0; background:var(--bg); color:var(--text); font:400 16px/1.5 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing:antialiased; }
+.num { font-variant-numeric: tabular-nums; }
+:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+a { color: var(--primary); }
+.wrap { max-width: 44rem; margin: 0 auto; padding: 0 1rem; }
+
+header { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top, 0px); margin-top: calc(-1 * env(safe-area-inset-top, 0px)); }
+.brand { display:flex; align-items:center; gap:.55rem; padding:.8rem 0 .2rem; }
+.brand h1 { font: 600 1.15rem/1.2 "IBM Plex Sans", sans-serif; margin:0; letter-spacing:-.01em; }
+.brand small { display:block; font-size:.8rem; color:var(--faint); font-weight:400; }
+.theme { margin-left:auto; background:none; border:0; color:var(--muted); padding:.4rem; border-radius:6px; cursor:pointer; }
+nav { display:flex; gap:.25rem; overflow-x:auto; padding:.5rem 0 .6rem; scrollbar-width:none; }
+nav::-webkit-scrollbar { display:none; }
+nav button { font: 500 .9rem "IBM Plex Sans", sans-serif; background:none; border:0; color:var(--muted); padding:.4rem .75rem; border-radius:999px; cursor:pointer; white-space:nowrap; }
+nav button[aria-selected="true"] { background:var(--text); color:var(--bg); }
+
+main { padding: 1.25rem 0 3rem; }
+h2 { font: 600 1.35rem/1.25 "IBM Plex Sans", sans-serif; letter-spacing:-.015em; margin:0 0 .25rem; }
+.lede { color:var(--muted); margin:0 0 1.25rem; font-size:.95rem; max-width: 36rem; }
+.day { font: 600 .95rem "IBM Plex Sans", sans-serif; margin: 1.5rem 0 .25rem; color: var(--muted); }
+.legend { display:flex; gap:1rem; font-size:.8rem; color:var(--faint); margin:-.5rem 0 1rem; flex-wrap:wrap; }
+.legend i { display:inline-block; width:.7rem; height:.7rem; border-radius:2px; margin-right:.3rem; vertical-align:-1px; }
+.tick-key { display:inline-block; width:2px; height:.8rem; background:var(--text); margin-right:.35rem; vertical-align:-2px; }
+
+details.fx { border-top: 1px solid var(--line); }
+details.fx:last-of-type { border-bottom: 1px solid var(--line); }
+details.fx summary { list-style:none; cursor:pointer; padding: .85rem 0 .9rem; }
+details.fx summary::-webkit-details-marker { display:none; }
+.teams { display:grid; grid-template-columns: 1fr auto 1fr; align-items:baseline; gap:.5rem; font: 600 1.05rem/1.25 "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif; }
+.teams .a { text-align:right; }
+.teams .t { font: 400 .8rem "IBM Plex Sans", sans-serif; color:var(--faint); text-align:center; }
+.split { position:relative; display:flex; height: 1.9rem; border-radius: 5px; overflow:hidden; margin-top:.55rem; font: 600 .82rem/1.9rem "IBM Plex Sans", sans-serif; color:#fff; }
+.split span { display:block; text-align:center; white-space:nowrap; overflow:hidden; }
+.split .h { background:var(--home); } .split .d { background:var(--draw); } .split .w { background:var(--away); color:#1F1300; }
+.mkt { position:relative; height:.55rem; margin-top:2px; }
+.mkt b { position:absolute; top:0; width:2px; height:.55rem; background:var(--text); transform:translateX(-1px); }
+.hint { display:flex; justify-content:space-between; font-size:.78rem; color:var(--faint); margin-top:.15rem; }
+.more { padding: 0 0 1rem; display:grid; grid-template-columns: minmax(0, 1fr); gap: .9rem; }
+.more > * { min-width: 0; }
+.facts { display:grid; grid-template-columns: repeat(3, 1fr); gap:.5rem; }
+.facts div { background:var(--panel); border-radius:6px; padding:.5rem .6rem; }
+.facts dt { font-size:.75rem; color:var(--faint); }
+.facts dd { margin:0; font-weight:600; font-variant-numeric: tabular-nums; }
+.scores { display:flex; flex-wrap:wrap; gap:.4rem; }
+.scores span { font-size:.85rem; background:var(--chip); color:var(--chip-text); border-radius:999px; padding:.15rem .6rem; font-variant-numeric: tabular-nums; }
+.cs-head { display:flex; justify-content:space-between; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:.4rem; }
+.seg { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
+.seg button { font: 500 .78rem "IBM Plex Sans", sans-serif; background:none; border:0; color:var(--muted); padding:.25rem .65rem; cursor:pointer; }
+.seg button[aria-pressed="true"] { background:var(--text); color:var(--bg); }
+.cs-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; border-radius:6px; }
+.grid { border-collapse: separate; border-spacing: 2px; font-size:.74rem; font-variant-numeric: tabular-nums; }
+.grid th { color:var(--faint); font-weight:500; padding:0 .25rem; background:var(--bg); }
+.grid th[scope="row"], .grid th.corner { position:sticky; left:0; z-index:1; }
+.grid td { min-width: 2.7rem; height: 1.85rem; text-align:center; border-radius:3px; white-space:nowrap; }
+.cs-note { margin:.4rem 0 0; font-size:.78rem; }
+.sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.diff { font-size:.85rem; color:var(--muted); }
+.diff strong { color: var(--text); }
+
+table.r { width:100%; border-collapse:collapse; font-size:.92rem; }
+table.r th { text-align:left; font-weight:500; color:var(--faint); font-size:.78rem; padding:.4rem .3rem; border-bottom:1px solid var(--line); }
+table.r td { padding:.55rem .3rem; border-bottom:1px solid var(--line); font-variant-numeric: tabular-nums; }
+table.r .n { text-align:right; }
+.mv { font-size:.75rem; width:2.2rem; } .up { color:var(--pos); } .dn { color:var(--neg); } .eq { color:var(--faint); }
+.bar { position:relative; height:.5rem; background:var(--panel); border-radius:3px; min-width:4rem; }
+.bar i { position:absolute; top:0; height:.5rem; border-radius:3px; }
+.bar::after { content:""; position:absolute; left:50%; top:-2px; width:1px; height:calc(.5rem + 4px); background:var(--faint); }
+
+.stats { display:grid; grid-template-columns: repeat(3, 1fr); gap:.5rem; margin-bottom:1.25rem; }
+.stats div { background:var(--panel); border-radius:8px; padding:.7rem .8rem; }
+.stats dt { font-size:.8rem; color:var(--faint); }
+.stats dd { margin:.1rem 0 0; font-size:1.35rem; font-weight:600; font-variant-numeric: tabular-nums; }
+.stats dd small { display:block; font-size:.78rem; font-weight:400; color:var(--faint); }
+.res { display:grid; grid-template-columns: 1fr auto; gap:.1rem .75rem; padding:.6rem 0; border-bottom:1px solid var(--line); font-size:.92rem; }
+.res .sc { font-weight:600; font-variant-numeric: tabular-nums; text-align:right; }
+.res .meta { grid-column: 1 / -1; font-size:.8rem; color:var(--faint); }
+.ok { color:var(--pos); } .miss { color:var(--neg); }
+
+.prose { max-width: 36rem; }
+.prose p, .prose li { color:var(--muted); }
+.prose h3 { font-size:1.05rem; margin:1.5rem 0 .4rem; }
+.empty { color:var(--muted); padding:1rem 0; }
+footer { border-top:1px solid var(--line); padding:1.25rem 0 2rem; font-size:.8rem; color:var(--faint); }
+@media (prefers-reduced-motion: no-preference) { details.fx[open] .more { animation: open .18s ease-out; } @keyframes open { from { opacity:0; transform: translateY(-4px); } } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="brand">
+      <svg width="24" height="24" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="12" width="4" height="9" rx="1" fill="#64748B"/><rect x="7" y="7" width="4" height="14" rx="1" fill="#64748B"/><rect x="13" y="2" width="4" height="19" rx="1" fill="#2563EB"/><rect x="19" y="9" width="2" height="12" rx="1" fill="#64748B"/></svg>
+      <h1>EdgeLab <small id="sub"></small></h1>
+      <button class="theme" id="theme" type="button" aria-label="Switch light or dark theme">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 2a8 8 0 1 0 0 16V2Z"/><circle cx="10" cy="10" r="7.25" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+    </div>
+    <nav role="tablist" aria-label="Sections" id="tabs"></nav>
+  </div>
+</header>
+<main class="wrap" id="main" tabindex="-1"></main>
+<footer class="wrap" id="foot"></footer>
+
+<script>
+const DATA = /*__DATA__*/null;
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pc = (x, d = 0) => (x * 100).toFixed(d) + "%";
+const odds = (p) => (1 / p).toFixed(2);
+function parseLocal(s) { const [d, t = "00:00"] = s.split("T"); const [y, m, dd] = d.split("-").map(Number); const [h, mi] = t.split(":").map(Number); return new Date(y, m - 1, dd, h, mi); }
+const dayName = (s) => parseLocal(s).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+const shortDay = (s) => parseLocal(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+const hhmm = (s) => s.slice(11, 16);
+
+const TABS = [["fixtures", "This round"], ["ratings", "Ratings"], ["record", "Record"], ["about", "About"]];
+function tab() { const h = location.hash.slice(1); return TABS.some(([k]) => k === h) ? h : "fixtures"; }
+function renderTabs() {
+  $("#tabs").innerHTML = TABS.map(([k, l]) => `<button role="tab" aria-selected="${k === tab()}" data-tab="${k}">${l}</button>`).join("");
+  document.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { location.hash = b.dataset.tab; }));
+}
+
+function split(p) {
+  const lab = (x) => (x >= 0.12 ? pc(x) : "");
+  return `<div class="split num" role="img" aria-label="Home ${pc(p[0])}, draw ${pc(p[1])}, away ${pc(p[2])}">
+    <span class="h" style="width:${p[0] * 100}%">${lab(p[0])}</span><span class="d" style="width:${p[1] * 100}%">${lab(p[1])}</span><span class="w" style="width:${p[2] * 100}%">${lab(p[2])}</span></div>`;
+}
+function marketTicks(m) {
+  if (!m) return "";
+  return `<div class="mkt" aria-hidden="true"><b style="left:${m[0] * 100}%"></b><b style="left:${(m[0] + m[1]) * 100}%"></b></div>`;
+}
+function biggestGap(p, m) {
+  if (!m) return "";
+  const names = ["home win", "draw", "away win"];
+  let k = 0; for (let i = 1; i < 3; i++) if (Math.abs(p[i] - m[i]) > Math.abs(p[k] - m[k])) k = i;
+  const g = (p[k] - m[k]) * 100;
+  if (Math.abs(g) < 3) return `<p class="diff">The model and the bookmakers broadly agree on this one.</p>`;
+  return `<p class="diff">Biggest disagreement: the model gives the <strong>${names[k]}</strong> ${Math.abs(g).toFixed(0)} points ${g > 0 ? "more" : "less"} than the bookmakers (${pc(p[k])} against ${pc(m[k])}).</p>`;
+}
+function cellText(v, mode) {
+  if (mode === "odds") { const o = 1 / v; return o >= 1000 ? "1000+" : o >= 100 ? o.toFixed(0) : o >= 10 ? o.toFixed(1) : o.toFixed(2); }
+  const x = v * 100; return x >= 10 ? x.toFixed(0) : x >= 0.1 ? x.toFixed(1) : "<0.1";
+}
+function grid(g, mode = "pct") {
+  const max = Math.max(...g.flat());
+  const cols = g[0].map((_, j) => j);
+  const cell = (v) => {
+    const a = Math.min(0.85, Math.sqrt(v / max) * 0.85);
+    const ink = a > 0.5 ? "color:#fff" : v < 0.001 ? "color:var(--faint)" : "";
+    return `<td style="background:rgba(var(--heat),${a.toFixed(3)});${ink}">${cellText(v, mode)}</td>`;
+  };
+  return `<table class="grid" aria-label="${mode === "odds" ? "Fair odds" : "Chance in percent"} for each score, home goals down, away goals across">
+    <thead><tr><th class="corner" scope="col"><span class="sr">Home goals down, away across</span></th>${cols.map((j) => `<th scope="col">${j}</th>`).join("")}</tr></thead>
+    <tbody>${g.map((r, i) => `<tr><th scope="row">${i}</th>${r.map(cell).join("")}</tr>`).join("")}</tbody></table>`;
+}
+function gridBlock(f, idx) {
+  return `<div class="cs">
+    <div class="cs-head"><span class="diff">Correct score, home goals down, away goals across</span>
+      <span class="seg" role="group" aria-label="Show as"><button type="button" data-cs="${idx}" data-mode="pct" aria-pressed="true">Chance %</button><button type="button" data-cs="${idx}" data-mode="odds" aria-pressed="false">Fair odds</button></span></div>
+    <div class="cs-scroll" id="cs-${idx}">${grid(f.grid)}</div>
+    <p class="diff cs-note">Scroll sideways for scores up to 10-10. Fair odds are 1 divided by the chance; compare them with a bookmaker's correct-score prices.</p></div>`;
+}
+function viewFixtures() {
+  const fx = DATA.fixtures;
+  if (!fx.length) return `<h2>No fixtures this week</h2><p class="lede">The next round will appear here once it is scheduled. Meanwhile, see the team ratings and how the model has done so far.</p>`;
+  const anyMarket = fx.some((f) => f.market);
+  let html = `<h2>${esc(shortDay(fx[0].date))}${fx.length > 1 && shortDay(fx[fx.length - 1].date) !== shortDay(fx[0].date) ? " to " + esc(shortDay(fx[fx.length - 1].date)) : ""}</h2>
+    <p class="lede">The chance of each result, from the EdgeLab model. Tap a match for expected goals, likely scores and fair odds.</p>
+    <div class="legend"><span><i style="background:var(--home)"></i>Home win</span><span><i style="background:var(--draw)"></i>Draw</span><span><i style="background:var(--away)"></i>Away win</span>${anyMarket ? `<span><span class="tick-key"></span>Bookmakers' split</span>` : ""}</div>`;
+  let day = "";
+  fx.forEach((f, idx) => {
+    const d = f.date.slice(0, 10);
+    if (d !== day) { html += `<h3 class="day">${esc(dayName(f.date))}</h3>`; day = d; }
+    html += `<details class="fx"><summary>
+      <div class="teams"><span>${esc(f.home)}</span><span class="t">${hhmm(f.date)}</span><span class="a">${esc(f.away)}</span></div>
+      ${split(f.p)}${marketTicks(f.market)}
+      <div class="hint num"><span>Expected goals ${f.xg[0].toFixed(1)}</span><span>${f.xg[1].toFixed(1)}</span></div>
+    </summary><div class="more">
+      <dl class="facts num">
+        <div><dt>Fair odds home</dt><dd>${odds(f.p[0])}</dd></div><div><dt>Fair odds draw</dt><dd>${odds(f.p[1])}</dd></div><div><dt>Fair odds away</dt><dd>${odds(f.p[2])}</dd></div>
+        <div><dt>Over 2.5 goals</dt><dd>${pc(f.over25)}</dd></div><div><dt>Both teams score</dt><dd>${pc(f.btts)}</dd></div>
+        <div><dt>Bookmakers H/D/A</dt><dd>${f.market ? f.market.map((x) => pc(x)).join(" ") : "Friday"}</dd></div>
+      </dl>
+      ${biggestGap(f.p, f.market)}
+      <div><div class="diff" style="margin-bottom:.35rem">Most likely scores</div><div class="scores">${f.scores.map(([i, j, q]) => `<span>${i}-${j} ${pc(q)}</span>`).join("")}</div></div>
+      ${gridBlock(f, idx)}
+    </div></details>`;
+  });
+  if (!anyMarket) html += `<p class="diff" style="margin-top:1rem">Bookmakers' odds for this round are collected on Friday afternoon; the comparison appears after the next update.</p>`;
+  return html;
+}
+
+function viewRatings() {
+  const r = DATA.ratings, maxAbs = Math.max(...r.map((x) => Math.abs(x.net)));
+  return `<h2>Team ratings</h2>
+    <p class="lede">How strong each team is right now, after weighting recent matches more. Attack: goals scored against an average side (1.00 is average). Defence: goals conceded multiplier, so lower is better.</p>
+    <table class="r"><thead><tr><th>#</th><th class="mv"><span class="sr" aria-label="Change this week">±</span></th><th>Team</th><th class="n">Attack</th><th class="n">Defence</th><th>Overall</th></tr></thead><tbody>
+    ${r.map((t) => {
+      const mv = t.prev - t.rank;
+      const mvh = mv > 0 ? `<span class="up">▲${mv}</span>` : mv < 0 ? `<span class="dn">▼${-mv}</span>` : `<span class="eq">–</span>`;
+      const w = (Math.abs(t.net) / maxAbs) * 50;
+      const bar = t.net >= 0 ? `<i style="left:50%;width:${w}%;background:var(--home)"></i>` : `<i style="left:${50 - w}%;width:${w}%;background:var(--away)"></i>`;
+      return `<tr><td class="num">${t.rank}</td><td class="mv">${mvh}</td><td>${esc(t.team)}</td><td class="n">${t.attack.toFixed(2)}</td><td class="n">${t.defence.toFixed(2)}</td><td><div class="bar">${bar}</div></td></tr>`;
+    }).join("")}</tbody></table>
+    <p class="diff" style="margin-top:.75rem">Movement compares with a week ago. Promoted teams start from the average of recent promoted sides and move with their results.</p>`;
+}
+
+function viewRecord() {
+  const r = DATA.record, live = DATA.live;
+  if (!r.n) return `<h2>Track record</h2><p class="empty">No matches played yet this season.</p>`;
+  const better = r.logloss_market != null && r.logloss_model_same < r.logloss_market;
+  return `<h2>Track record</h2>
+    <p class="lede">Every match this season, each predicted using only results from before it was played. A lower score is better.</p>
+    <dl class="stats">
+      <div><dt>Matches</dt><dd>${r.n}</dd></div>
+      <div><dt>Favourite came in</dt><dd>${pc(r.fav_model)} <small>${r.fav_market != null ? "bookmakers " + pc(r.fav_market) : ""}</small></dd></div>
+      <div><dt>Accuracy score</dt><dd>${r.logloss_model_same != null ? r.logloss_model_same.toFixed(3) : r.logloss_model.toFixed(3)} <small>${r.logloss_market != null ? "bookmakers " + r.logloss_market.toFixed(3) : ""}</small></dd></div>
+    </dl>
+    <p class="diff">${r.logloss_market == null ? "" : better ? "So far this season the model's probabilities have been slightly more accurate than the bookmakers'. That can be luck over a small number of matches." : "So far this season the bookmakers' probabilities have been more accurate than the model's."}
+    ${live.settled ? ` Since live logging began, ${live.settled} predictions have been settled (accuracy score ${live.logloss.toFixed(3)}, favourite came in ${pc(live.fav_hit)}).` : ` Live predictions are logged before each round and will be scored here as results come in.`}</p>
+    ${r.matches.map((x) => {
+      const k = { H: 0, D: 1, A: 2 }[x.res], fav = x.p.indexOf(Math.max(...x.p));
+      return `<div class="res"><span>${esc(x.home)} v ${esc(x.away)}</span><span class="sc">${x.score[0]}–${x.score[1]}</span>
+        <span class="meta num">${esc(shortDay(x.date))}. Model gave this result ${pc(x.p[k])}${x.market ? `, bookmakers ${pc(x.market[k])}` : ""}. <span class="${fav === k ? "ok" : "miss"}">${fav === k ? "Model's favourite came in" : "Model's favourite missed"}</span></span></div>`;
+    }).join("")}`;
+}
+
+function viewAbout() {
+  const m = DATA.model;
+  return `<div class="prose"><h2>How it works</h2>
+    <p>EdgeLab gives each team two numbers: how many goals it tends to score and how many it tends to concede, adjusted for the strength of the opponents it has faced. A home side gets a boost (currently ${m.home.toFixed(2)} times its usual scoring rate). Recent matches count more than old ones; a match from a year ago counts about half as much as last week's.</p>
+    <p>For each fixture the model works out the chance of every possible score, from 0–0 upwards, and adds them up into the chance of a home win, a draw and an away win. The method follows Dixon and Coles (1997), fitted to ${m.matches.toLocaleString()} Premier League matches since 2023.</p>
+    <h3>What the numbers mean</h3>
+    <p>Fair odds are the decimal odds at which a bet would break even if the model were exactly right: 1 divided by the probability. The thin black marks under each bar show how the bookmakers split the same match, once their margin is removed.</p>
+    <h3>How good is it?</h3>
+    <p>Tested on 810 past matches it had never seen, the model was about as accurate as the average bookmaker in 2024/25 and a little less accurate in 2025/26. It has not been shown to beat the bookmakers, and nothing here is a betting tip. The model is being improved step by step, and each change is tested before it goes live.</p>
+    <h3>Betting</h3>
+    <p>If you bet, only bet what you can afford to lose. You must be 18 or over. Free, confidential help is available from <a href="https://www.begambleaware.org" rel="noopener">BeGambleAware</a>.</p></div>`;
+}
+
+const VIEWS = { fixtures: viewFixtures, ratings: viewRatings, record: viewRecord, about: viewAbout };
+function render() {
+  renderTabs(); $("#main").innerHTML = VIEWS[tab()]();
+  document.querySelectorAll("[data-cs]").forEach((b) => (b.onclick = () => {
+    const i = +b.dataset.cs, mode = b.dataset.mode;
+    $("#cs-" + i).innerHTML = grid(DATA.fixtures[i].grid, mode);
+    b.parentElement.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  }));
+}
+window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
+
+$("#theme").onclick = () => {
+  const root = document.documentElement;
+  const cur = root.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  root.dataset.theme = cur === "dark" ? "light" : "dark";
+  try { localStorage.setItem("edgelab-theme", root.dataset.theme); } catch (e) {}
+};
+try { const t = localStorage.getItem("edgelab-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+
+if (!DATA) { $("#main").innerHTML = `<p class="empty">No forecast data in this page. Run build.py to generate it.</p>`; }
+else {
+  $("#sub").textContent = `${DATA.league} forecasts, ${DATA.season}`;
+  const g = DATA.generated.slice(0, 10);
+  $("#foot").innerHTML = `Updated ${esc(parseLocal(DATA.generated).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }))}. Results to ${esc(shortDay(DATA.last_result))}. Data from football-data.co.uk. Kick-off times are UK time. Not betting advice.`;
+  render();
+}
+</script>
+</body>
+</html>
