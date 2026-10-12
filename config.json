@@ -5,9 +5,50 @@
   "prior_weight": 5.0,
   "current_season": "2627",
   "seasons": [
-    {"code": "2324", "label": "2023/24", "start": "2023-08-01", "end": "2024-06-01", "promoted": ["Burnley", "Sheffield United", "Luton"]},
-    {"code": "2425", "label": "2024/25", "start": "2024-08-01", "end": "2025-06-01", "promoted": ["Leicester", "Ipswich", "Southampton"]},
-    {"code": "2526", "label": "2025/26", "start": "2025-08-01", "end": "2026-06-01", "promoted": ["Leeds", "Burnley", "Sunderland"]},
-    {"code": "2627", "label": "2026/27", "start": "2026-08-01", "end": "2027-06-01", "promoted": ["Coventry", "Hull", "Ipswich"]}
-  ]
+    {
+      "code": "2324",
+      "label": "2023/24",
+      "start": "2023-08-01",
+      "end": "2024-06-01",
+      "promoted": [
+        "Burnley",
+        "Sheffield United",
+        "Luton"
+      ]
+    },
+    {
+      "code": "2425",
+      "label": "2024/25",
+      "start": "2024-08-01",
+      "end": "2025-06-01",
+      "promoted": [
+        "Leicester",
+        "Ipswich",
+        "Southampton"
+      ]
+    },
+    {
+      "code": "2526",
+      "label": "2025/26",
+      "start": "2025-08-01",
+      "end": "2026-06-01",
+      "promoted": [
+        "Leeds",
+        "Burnley",
+        "Sunderland"
+      ]
+    },
+    {
+      "code": "2627",
+      "label": "2026/27",
+      "start": "2026-08-01",
+      "end": "2027-06-01",
+      "promoted": [
+        "Coventry",
+        "Hull",
+        "Ipswich"
+      ]
+    }
+  ],
+  "value_threshold": 0.02
 }

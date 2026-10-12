@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Premier League match probabilities from the EdgeLab model, updated every week.">
+<meta name="description" content="Premier League probabilities from the EdgeLab model, compared with Opta, Bet365, the Betfair Exchange and Pinnacle, with value bets checked against the exchange.">
 <title>EdgeLab: Premier League forecasts</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -87,6 +87,23 @@ details.fx summary::-webkit-details-marker { display:none; }
 .grid td { min-width: 2.7rem; height: 1.85rem; text-align:center; border-radius:3px; white-space:nowrap; }
 .cs-note { margin:.4rem 0 0; font-size:.78rem; }
 .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.cmp { width:100%; border-collapse:collapse; font-size:.85rem; font-variant-numeric: tabular-nums; }
+.cmp th { text-align:right; font-weight:500; color:var(--faint); font-size:.75rem; padding:.3rem .25rem; border-bottom:1px solid var(--line); }
+.cmp th:first-child, .cmp td:first-child { text-align:left; }
+.cmp td { text-align:right; padding:.4rem .25rem; border-bottom:1px solid var(--line); white-space:nowrap; }
+.cmp td small { display:block; color:var(--faint); font-size:.72rem; }
+.cmp tr.sharp td { font-weight:600; }
+.cmp tr.mine td:first-child { color:var(--primary); font-weight:600; }
+.valbox { border:1px solid var(--pos); border-radius:8px; padding:.65rem .8rem; }
+.valbox h4 { margin:0 0 .25rem; font-size:.95rem; color:var(--pos); }
+.valbox p { margin:.15rem 0; font-size:.85rem; color:var(--muted); }
+.valbox strong { color:var(--text); }
+.vlist { border-top:1px solid var(--line); margin-bottom:1.25rem; }
+.vrow { display:grid; grid-template-columns: 1fr auto; gap:.1rem .75rem; padding:.6rem 0; border-bottom:1px solid var(--line); font-size:.92rem; }
+.vrow .ev { font-weight:600; color:var(--pos); font-variant-numeric: tabular-nums; text-align:right; }
+.vrow .meta { grid-column:1 / -1; font-size:.8rem; color:var(--faint); }
+.note { background:var(--panel); border-radius:8px; padding:.7rem .85rem; font-size:.85rem; color:var(--muted); margin:0 0 1.25rem; }
+.note strong { color:var(--text); }
 .diff { font-size:.85rem; color:var(--muted); }
 .diff strong { color: var(--text); }
 
@@ -160,13 +177,32 @@ function marketTicks(m) {
   if (!m) return "";
   return `<div class="mkt" aria-hidden="true"><b style="left:${m[0] * 100}%"></b><b style="left:${(m[0] + m[1]) * 100}%"></b></div>`;
 }
-function biggestGap(p, m) {
+function biggestGap(p, m, who = "the bookmakers") {
   if (!m) return "";
   const names = ["home win", "draw", "away win"];
   let k = 0; for (let i = 1; i < 3; i++) if (Math.abs(p[i] - m[i]) > Math.abs(p[k] - m[k])) k = i;
   const g = (p[k] - m[k]) * 100;
-  if (Math.abs(g) < 3) return `<p class="diff">The model and the bookmakers broadly agree on this one.</p>`;
-  return `<p class="diff">Biggest disagreement: the model gives the <strong>${names[k]}</strong> ${Math.abs(g).toFixed(0)} points ${g > 0 ? "more" : "less"} than the bookmakers (${pc(p[k])} against ${pc(m[k])}).</p>`;
+  if (Math.abs(g) < 3) return `<p class="diff">The model and ${who} broadly agree on this one.</p>`;
+  return `<p class="diff">Biggest disagreement: the model gives the <strong>${names[k]}</strong> ${Math.abs(g).toFixed(0)} points ${g > 0 ? "more" : "less"} than ${who} (${pc(p[k])} against ${pc(m[k])}). When they disagree this much, the market has usually been right.</p>`;
+}
+const OUT = { home: "Home win", draw: "Draw", away: "Away win" };
+function outcomeName(f, o) { return o === "home" ? `${f.home} to win` : o === "away" ? `${f.away} to win` : "Draw"; }
+function compareTable(f) {
+  if (!f.sources || f.sources.length < 2) return "";
+  const rows = f.sources.map((s) => {
+    const cls = s.label === "EdgeLab model" ? "mine" : s.kind === "sharp" ? "sharp" : "";
+    const cell = (k) => `<td>${pc(s.p[k])}${s.odds ? `<small>${s.odds[k].toFixed(2)}</small>` : ""}</td>`;
+    return `<tr class="${cls}"><td>${esc(s.label)}</td>${cell(0)}${cell(1)}${cell(2)}</tr>`;
+  }).join("");
+  return `<div><div class="diff" style="margin-bottom:.35rem">Who thinks what (chance of each result; bookmaker odds underneath, margin removed from the chances)</div>
+    <div class="cs-scroll"><table class="cmp"><thead><tr><th>Source</th><th>${esc(f.home)}</th><th>Draw</th><th>${esc(f.away)}</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="diff cs-note">Bold rows are the sharp yardstick: the betting exchange${f.sources.some((x) => x.label === "Pinnacle") ? " and Pinnacle" : ""}, where prices carry almost no margin.</p></div>`;
+}
+function valueBox(f) {
+  if (!f.value || !f.value.length) return "";
+  return f.value.map((v) => `<div class="valbox"><h4>Value: ${esc(outcomeName(f, v.outcome))} at ${v.price.toFixed(2)}</h4>
+    <p>Offered by <strong>${esc(v.books.join(", "))}</strong>. The exchange's fair price is ${v.fair_odds.toFixed(2)}, so this price is worth <strong>${(v.ev * 100).toFixed(1)}%</strong> more than a fair bet.</p>
+    <p>Quarter-Kelly stake: ${(v.quarter_kelly * 100).toFixed(1)}% of your betting bank. EdgeLab model gives this ${pc(v.p_model)} against the exchange's ${pc(v.p_sharp)}.</p></div>`).join("");
 }
 function cellText(v, mode) {
   if (mode === "odds") { const o = 1 / v; return o >= 1000 ? "1000+" : o >= 100 ? o.toFixed(0) : o >= 10 ? o.toFixed(1) : o.toFixed(2); }
@@ -195,16 +231,26 @@ function viewFixtures() {
   const fx = DATA.fixtures;
   if (!fx.length) return `<h2>No fixtures this week</h2><p class="lede">The next round will appear here once it is scheduled. Meanwhile, see the team ratings and how the model has done so far.</p>`;
   const anyMarket = fx.some((f) => f.market);
+  const vals = fx.flatMap((f) => (f.value || []).map((v) => ({ f, v })));
+  const anySharp = fx.some((f) => f.sharp);
+  let valueHtml = "";
+  if (vals.length) {
+    valueHtml = `<h3 class="day" style="margin-top:0">Value bets this round</h3><div class="vlist">${vals.map(({ f, v }) => `<div class="vrow"><span>${esc(outcomeName(f, v.outcome))} <span class="diff">(${esc(f.home)} v ${esc(f.away)})</span></span><span class="ev">+${(v.ev * 100).toFixed(1)}%</span>
+      <span class="meta num">${esc(shortDay(f.date))} ${hhmm(f.date)}. ${v.price.toFixed(2)} with ${esc(v.books.join(", "))}; exchange fair price ${v.fair_odds.toFixed(2)}. Quarter-Kelly ${(v.quarter_kelly * 100).toFixed(1)}% of bank.</span></div>`).join("")}</div>`;
+  } else if (anySharp) {
+    valueHtml = `<p class="note"><strong>No value bets this round.</strong> No bookmaker's price beats the betting exchange's fair price by ${(DATA.value_threshold * 100).toFixed(0)}% or more. Most weeks have a few; this one has none.</p>`;
+  }
   let html = `<h2>${esc(shortDay(fx[0].date))}${fx.length > 1 && shortDay(fx[fx.length - 1].date) !== shortDay(fx[0].date) ? " to " + esc(shortDay(fx[fx.length - 1].date)) : ""}</h2>
     <p class="lede">The chance of each result, from the EdgeLab model. Tap a match for expected goals, likely scores and fair odds.</p>
-    <div class="legend"><span><i style="background:var(--home)"></i>Home win</span><span><i style="background:var(--draw)"></i>Draw</span><span><i style="background:var(--away)"></i>Away win</span>${anyMarket ? `<span><span class="tick-key"></span>Bookmakers' split</span>` : ""}</div>`;
+    ${valueHtml}
+    <div class="legend"><span><i style="background:var(--home)"></i>Home win</span><span><i style="background:var(--draw)"></i>Draw</span><span><i style="background:var(--away)"></i>Away win</span>${anySharp ? `<span><span class="tick-key"></span>Betting exchange's split</span>` : anyMarket ? `<span><span class="tick-key"></span>Bookmakers' split</span>` : ""}</div>`;
   let day = "";
   fx.forEach((f, idx) => {
     const d = f.date.slice(0, 10);
     if (d !== day) { html += `<h3 class="day">${esc(dayName(f.date))}</h3>`; day = d; }
     html += `<details class="fx"><summary>
       <div class="teams"><span>${esc(f.home)}</span><span class="t">${hhmm(f.date)}</span><span class="a">${esc(f.away)}</span></div>
-      ${split(f.p)}${marketTicks(f.market)}
+      ${split(f.p)}${marketTicks(f.sharp || f.market)}${f.value && f.value.length ? `<div class="diff" style="color:var(--pos);margin-top:.2rem">Value bet available: tap for details</div>` : ""}
       <div class="hint num"><span>Expected goals ${f.xg[0].toFixed(1)}</span><span>${f.xg[1].toFixed(1)}</span></div>
     </summary><div class="more">
       <dl class="facts num">
@@ -212,7 +258,9 @@ function viewFixtures() {
         <div><dt>Over 2.5 goals</dt><dd>${pc(f.over25)}</dd></div><div><dt>Both teams score</dt><dd>${pc(f.btts)}</dd></div>
         <div><dt>Bookmakers H/D/A</dt><dd>${f.market ? f.market.map((x) => pc(x)).join(" ") : "Friday"}</dd></div>
       </dl>
-      ${biggestGap(f.p, f.market)}
+      ${valueBox(f)}
+      ${compareTable(f)}
+      ${f.sharp ? biggestGap(f.p, f.sharp, "the betting exchange") : biggestGap(f.p, f.market)}
       <div><div class="diff" style="margin-bottom:.35rem">Most likely scores</div><div class="scores">${f.scores.map(([i, j, q]) => `<span>${i}-${j} ${pc(q)}</span>`).join("")}</div></div>
       ${gridBlock(f, idx)}
     </div></details>`;
@@ -249,11 +297,35 @@ function viewRecord() {
     </dl>
     <p class="diff">${r.logloss_market == null ? "" : better ? "So far this season the model's probabilities have been slightly more accurate than the bookmakers'. That can be luck over a small number of matches." : "So far this season the bookmakers' probabilities have been more accurate than the model's."}
     ${live.settled ? ` Since live logging began, ${live.settled} predictions have been settled (accuracy score ${live.logloss.toFixed(3)}, favourite came in ${pc(live.fav_hit)}).` : ` Live predictions are logged before each round and will be scored here as results come in.`}</p>
+    ${sourceBoard(r)}
+    ${valueRecord()}
+    <h3 class="day">Every match this season</h3>
     ${r.matches.map((x) => {
       const k = { H: 0, D: 1, A: 2 }[x.res], fav = x.p.indexOf(Math.max(...x.p));
       return `<div class="res"><span>${esc(x.home)} v ${esc(x.away)}</span><span class="sc">${x.score[0]}–${x.score[1]}</span>
         <span class="meta num">${esc(shortDay(x.date))}. Model gave this result ${pc(x.p[k])}${x.market ? `, bookmakers ${pc(x.market[k])}` : ""}. <span class="${fav === k ? "ok" : "miss"}">${fav === k ? "Model's favourite came in" : "Model's favourite missed"}</span></span></div>`;
     }).join("")}`;
+}
+
+function sourceBoard(r) {
+  if (!r.sources || r.sources.length < 2) return "";
+  const rows = r.sources.map((x) => `<tr${x.label === "EdgeLab model" ? ' class="mine"' : ""}><td>${esc(x.label)}</td><td>${x.n}</td><td>${x.logloss.toFixed(3)}</td><td>${x.label === "EdgeLab model" ? "–" : x.model_same.toFixed(3)}</td><td>${pc(x.fav)}</td></tr>`).join("");
+  return `<h3 class="day">Who has been most accurate this season</h3>
+    <div class="cs-scroll"><table class="cmp"><thead><tr><th>Source</th><th>Matches</th><th>Accuracy</th><th>Model, same matches</th><th>Favourite won</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="diff cs-note">Accuracy is the average log loss: lower is better. Each source is scored on the matches it priced, next to the model on exactly those matches. Opta's figures come from Opta Analyst's weekly preview.</p>`;
+}
+function valueRecord() {
+  const v = DATA.value;
+  if (!v || !v.logged) return `<h3 class="day">Value bets</h3><p class="diff">Value bets are logged here the first time they appear, then settled against the result and the exchange's closing price. None logged yet.</p>`;
+  const stats = v.settled ? `<dl class="stats">
+      <div><dt>Settled bets</dt><dd>${v.settled} <small>${v.wins} won, ${v.logged - v.settled} pending</small></dd></div>
+      <div><dt>Profit, 1 unit each</dt><dd class="${v.profit >= 0 ? "ok" : "miss"}">${v.profit >= 0 ? "+" : ""}${v.profit.toFixed(2)} <small>return ${(v.roi * 100).toFixed(1)}%</small></dd></div>
+      <div><dt>Beat the closing price by</dt><dd>${v.clv != null ? (v.clv * 100).toFixed(1) + "%" : "–"} <small>${v.clv_lo != null ? `range ${(v.clv_lo * 100).toFixed(1)}% to ${(v.clv_hi * 100).toFixed(1)}%` : "needs 2+ bets"}</small></dd></div></dl>` : `<p class="diff">${v.logged} value bets logged; none settled yet.</p>`;
+  return `<h3 class="day">Value bets</h3>${stats}
+    <p class="diff">The real test of an edge is the closing price: if our bets keep getting better odds than the exchange offers at kick-off, the edge is real even when results go against us for a while. Profit over a few dozen bets is mostly luck.</p>
+    <div class="vlist">${v.bets.map((b) => `<div class="vrow"><span>${esc(b.outcome === "draw" ? "Draw" : (b.outcome === "home" ? b.home : b.away) + " to win")} <span class="diff">(${esc(b.home)} v ${esc(b.away)})</span></span>
+      <span class="ev ${b.settled ? (b.won ? "ok" : "miss") : ""}" style="${b.settled ? "" : "color:var(--faint)"}">${b.settled ? (b.won ? "Won" : "Lost") : "Pending"}</span>
+      <span class="meta num">${esc(shortDay(b.date))}. ${b.price.toFixed(2)} with ${esc(b.books)}, +${(b.ev * 100).toFixed(1)}% at the time${b.clv != null ? `; ${b.clv >= 0 ? "beat" : "missed"} the closing price by ${Math.abs(b.clv * 100).toFixed(1)}%` : ""}.</span></div>`).join("")}</div>`;
 }
 
 function viewAbout() {
@@ -264,7 +336,10 @@ function viewAbout() {
     <h3>What the numbers mean</h3>
     <p>Fair odds are the decimal odds at which a bet would break even if the model were exactly right: 1 divided by the probability. The thin black marks under each bar show how the bookmakers split the same match, once their margin is removed.</p>
     <h3>How good is it?</h3>
-    <p>Tested on 810 past matches it had never seen, the model was about as accurate as the average bookmaker in 2024/25 and a little less accurate in 2025/26. It has not been shown to beat the bookmakers, and nothing here is a betting tip. The model is being improved step by step, and each change is tested before it goes live.</p>
+    <p>Tested on 810 past matches it had never seen (August 2024 to September 2026), the model was slightly less accurate than every bookmaker we compared: Bet365, the Betfair Exchange, Pinnacle and the market average were all within a whisker of each other and a little ahead of the model. On its own, the model does not find value: bets it rated as value got no better prices than picking at random.</p>
+    <h3>Finding value</h3>
+    <p>Value bets on this site come from comparing prices, not from the model. The Betfair Exchange (and Pinnacle, when available) prices each match with almost no margin, so its odds are the fairest estimate of the true chances. Now and then an ordinary bookmaker offers better odds than that fair price. When one beats it by ${(DATA.value_threshold * 100).toFixed(0)}% or more, it is listed as a value bet.</p>
+    <p>Tested on the same 810 matches, this rule found 120 bets. On average they got prices 4.8% better than the exchange's closing price (range 3.1% to 6.5%), and they did so in every season tested. Profit was +18.7% but over so few bets that luck dominates (range −10% to +49%). Prices move quickly, the best price is not always with a bookmaker you can use, and bookmakers limit accounts that win, so treat this as a strong lead, not a guarantee. Every value bet is logged on the Record tab before kick-off so the rule can be checked in the open.</p>
     <h3>Betting</h3>
     <p>If you bet, only bet what you can afford to lose. You must be 18 or over. Free, confidential help is available from <a href="https://www.begambleaware.org" rel="noopener">BeGambleAware</a>.</p></div>`;
 }
@@ -292,7 +367,7 @@ if (!DATA) { $("#main").innerHTML = `<p class="empty">No forecast data in this p
 else {
   $("#sub").textContent = `${DATA.league} forecasts, ${DATA.season}`;
   const g = DATA.generated.slice(0, 10);
-  $("#foot").innerHTML = `Updated ${esc(parseLocal(DATA.generated).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }))}. Results to ${esc(shortDay(DATA.last_result))}. Data from football-data.co.uk. Kick-off times are UK time. Not betting advice.`;
+  $("#foot").innerHTML = `Updated ${esc(parseLocal(DATA.generated).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }))}. Results to ${esc(shortDay(DATA.last_result))}. Odds from football-data.co.uk${DATA.odds_api ? " and The Odds API" : ""}; Opta supercomputer figures from <a href="https://theanalyst.com/articles/premier-league-match-predictions" rel="noopener">Opta Analyst</a>. Kick-off times are UK time. Not betting advice. 18+, <a href="https://www.begambleaware.org" rel="noopener">BeGambleAware</a>.`;
   render();
 }
 </script>

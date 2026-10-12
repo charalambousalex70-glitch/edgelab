@@ -21,9 +21,16 @@ import numpy as np
 import pandas as pd
 
 from edgelab import dixon_coles as dc
+from edgelab import markets as mk
 
 ROOT = Path(__file__).parent
 DATA, PUBLIC, HISTORY = ROOT / "data", ROOT / "public", ROOT / "history" / "predictions.csv"
+VALUE_LOG = ROOT / "history" / "value_bets.csv"
+OPTA = ROOT / "opta.csv"
+# Every odds column we keep: pre-match prices, and closing prices ("C") for settling value bets.
+ODDS_PREFIXES = list(mk.FD_BOOKS) + list(mk.FD_SHARP) + list(mk.FD_OTHER)
+ODDS_COLS = [f"{b}{x}" for b in ODDS_PREFIXES for x in mk.FD_SUFFIX]
+CLOSE_COLS = [f"{b}C{x}" for b in ("BFE", "Avg", "PS", "B365") for x in mk.FD_SUFFIX]
 BASE_URL = "https://www.football-data.co.uk"
 HEADERS = {"User-Agent": "Mozilla/5.0 (EdgeLab forecasts; weekly build)"}
 
@@ -68,16 +75,15 @@ def load_results(cfg) -> pd.DataFrame:
             continue
         d = read_csv_text(path.read_bytes())
         d = d.dropna(subset=["HomeTeam", "AwayTeam", "FTHG", "FTAG"])
-        for c in ["AvgH", "AvgD", "AvgA"]:
-            if c not in d:
-                d[c] = np.nan
         time = d["Time"].fillna("15:00") if "Time" in d else "15:00"
-        frames.append(pd.DataFrame({
+        base = pd.DataFrame({
             "date": pd.to_datetime(d["Date"] + " " + time, dayfirst=True),
             "home": d["HomeTeam"].str.strip(), "away": d["AwayTeam"].str.strip(),
-            "home_goals": d["FTHG"].astype(int), "away_goals": d["FTAG"].astype(int),
-            "AvgH": d["AvgH"], "AvgD": d["AvgD"], "AvgA": d["AvgA"], "season": s["code"],
-        }))
+            "home_goals": d["FTHG"].astype(int), "away_goals": d["FTAG"].astype(int), "season": s["code"],
+        })
+        odds = pd.DataFrame({c: pd.to_numeric(d[c], errors="coerce") if c in d else np.nan
+                             for c in ODDS_COLS + CLOSE_COLS}, index=d.index)
+        frames.append(pd.concat([base, odds], axis=1))
     m = pd.concat(frames, ignore_index=True).sort_values("date").reset_index(drop=True)
     m["res"] = np.where(m.home_goals > m.away_goals, "H", np.where(m.home_goals == m.away_goals, "D", "A"))
     return m
@@ -94,8 +100,9 @@ def load_fixtures(cfg, results: pd.DataFrame, now: pd.Timestamp) -> tuple[pd.Dat
         time = d["Time"].fillna("15:00") if "Time" in d else "15:00"
         out = pd.DataFrame({"date": pd.to_datetime(d["Date"] + " " + time, dayfirst=True),
                             "home": d["HomeTeam"].str.strip(), "away": d["AwayTeam"].str.strip()})
-        for c in ["AvgH", "AvgD", "AvgA", "MaxH", "MaxD", "MaxA"]:
-            out[c] = pd.to_numeric(d[c], errors="coerce").to_numpy() if c in d else np.nan
+        extra = pd.DataFrame({c: pd.to_numeric(d[c], errors="coerce").to_numpy() if c in d else np.nan
+                              for c in ODDS_COLS}, index=out.index)
+        out = pd.concat([out, extra], axis=1)
         keep = [(h, a, dt.date()) not in played and dt >= now - timedelta(hours=3)
                 for h, a, dt in zip(out.home, out.away, out.date)]
         return out[keep].sort_values("date").reset_index(drop=True)
@@ -125,12 +132,9 @@ def promoted_prior(cfg, m, xi):
     return (float(np.mean(las)), float(np.mean(lbs))) if las else (0.0, 0.0)
 
 
-def fair_market(row) -> list | None:
-    o = np.array([row.get("AvgH"), row.get("AvgD"), row.get("AvgA")], float)
-    if not np.isfinite(o).all() or (o <= 1).any():
-        return None
-    inv = 1 / o
-    return (inv / inv.sum()).round(4).tolist()
+def fair_market(row, prefix: str = "Avg") -> list | None:
+    p = mk.no_vig([row.get(f"{prefix}{x}") for x in mk.FD_SUFFIX])
+    return None if p is None else [round(x, 4) for x in p]
 
 
 def r4(x):
@@ -162,6 +166,9 @@ def build(cfg, now: pd.Timestamp) -> dict:
     unknown = sorted((set(fx.home) | set(fx.away)) - set(teams_now))
     if unknown:
         raise SystemExit(f"Unknown team names in fixtures (fix spelling to match football-data): {unknown}")
+    opta = mk.load_opta(OPTA)
+    api_books = load_odds_api(teams_now, fx, now)
+    threshold = cfg.get("value_threshold", 0.02)
     fixtures = []
     for _, g in fx.iterrows():
         p = fit.predict(g.home, g.away)
@@ -178,6 +185,15 @@ def build(cfg, now: pd.Timestamp) -> dict:
             "market": fair_market(g),
             "odds": None if fair_market(g) is None else [r4(g.AvgH), r4(g.AvgD), r4(g.AvgA)],
         })
+        f = fixtures[-1]
+        mkts = mk.fixture_markets(g, api_books.get((g.home, g.away)), f["p"],
+                                  opta.get((g.home, g.away, g.date.strftime("%Y-%m-%d"))), threshold)
+        f["sources"] = [{**x, "p": [r4(v) for v in x["p"]], "odds": None if x["odds"] is None else [r4(v) for v in x["odds"]]}
+                        for x in mkts["sources"]]
+        f["sharp"] = None if mkts["p_sharp"] is None else [r4(v) for v in mkts["p_sharp"]]
+        f["best"] = mkts["best"]
+        f["value"] = [{**v, **{k: r4(v[k]) for k in ("price", "fair_odds", "p_sharp", "ev", "quarter_kelly", "p_model")}}
+                      for v in mkts["value"]]
 
     # This season's record: each match predicted from results before it only.
     season_m = m[m.season == cur["code"]]
@@ -188,15 +204,17 @@ def build(cfg, now: pd.Timestamp) -> dict:
                       on=["date", "home_team", "away_team"], suffixes=("", "_m"))
         o = np.stack([rp.res == "H", rp.res == "D", rp.res == "A"], 1)
         pm = rp[["home", "draw", "away"]].to_numpy()
-        mk = rp.apply(fair_market, axis=1)
-        rp = rp.assign(market=mk.to_numpy())
-        has_mk = mk.notna().to_numpy()
-        mkt = np.array([x if x is not None else [np.nan] * 3 for x in mk], float)
+        mkt_series = rp.apply(fair_market, axis=1)
+        rp = rp.assign(market=mkt_series.to_numpy())
+        has_mk = mkt_series.notna().to_numpy()
+        mkt = np.array([x if x is not None else [np.nan] * 3 for x in mkt_series], float)
         ll_model = -np.log((pm * o).sum(1))
         ll_mkt = -np.log(np.where(has_mk, (np.nan_to_num(mkt) * o).sum(1), np.nan))
         fav_model = pm.argmax(1) == o.argmax(1)
         fav_mkt = np.nanargmax(np.nan_to_num(mkt, nan=-1), 1) == o.argmax(1)
+        record_sources = source_accuracy(rp, o, pm, opta)
         record = {
+            "sources": record_sources,
             "n": int(len(rp)), "n_market": int(has_mk.sum()),
             "logloss_model": r4(ll_model.mean()),
             "logloss_model_same": r4(ll_model[has_mk].mean()) if has_mk.any() else None,
@@ -211,23 +229,126 @@ def build(cfg, now: pd.Timestamp) -> dict:
         }
 
     live = log_live(fixtures, now, m)
+    value = log_value(fixtures, now, m)
     return {
         "generated": now.strftime("%Y-%m-%dT%H:%M"), "league": cfg["league"], "season": cur["label"],
         "last_result": m.date.max().strftime("%Y-%m-%d"), "fixtures_source": fx_source,
         "model": {"home": r4(fit.home), "rho": r4(fit.rho), "xi": xi, "matches": fit.n_matches,
                   "promoted_prior": [r4(np.exp(prior[0])), r4(np.exp(prior[1]))]},
-        "fixtures": fixtures, "ratings": ratings, "record": record, "live": live,
+        "fixtures": fixtures, "ratings": ratings, "record": record, "live": live, "value": value,
+        "value_threshold": threshold, "odds_api": bool(api_books),
+        "backtest": cfg.get("backtest"),
     }
+
+
+def load_odds_api(teams: list[str], fx: pd.DataFrame, now: pd.Timestamp) -> dict:
+    """Live prices from The Odds API when a key is set and a fixture is within 8 days."""
+    import os
+
+    cache = DATA / "odds_api.json"
+    key = os.environ.get("ODDS_API_KEY", "").strip()
+    events = None
+    if key and len(fx) and (fx.date.min() - now) <= timedelta(days=8):
+        try:
+            events = mk.fetch_odds_api(key, cache)
+        except Exception as exc:  # never let the optional feed break the site
+            print(f"The Odds API failed ({exc}); continuing with football-data prices only")
+    elif cache.exists() and not key:
+        events = json.loads(cache.read_text())  # local runs with a saved payload
+    return mk.parse_odds_api(events, set(teams)) if events else {}
+
+
+def source_accuracy(rp: pd.DataFrame, o: np.ndarray, pm: np.ndarray, opta: dict) -> list:
+    """Season-to-date log loss for each source, each on the matches where it has prices,
+    next to the model's log loss on exactly those matches."""
+    out = []
+    ll_model = -np.log((pm * o).sum(1))
+
+    def add(label, probs):
+        ok = np.array([p is not None for p in probs])
+        if not ok.any():
+            return
+        P = np.array([p for p in probs if p is not None], float)
+        ll = -np.log((P * o[ok]).sum(1))
+        fav = P.argmax(1) == o[ok].argmax(1)
+        out.append({"label": label, "n": int(ok.sum()), "logloss": r4(ll.mean()),
+                    "model_same": r4(ll_model[ok].mean()), "fav": r4(fav.mean())})
+
+    out.append({"label": "EdgeLab model", "n": int(len(pm)), "logloss": r4(ll_model.mean()),
+                "model_same": r4(ll_model.mean()), "fav": r4((pm.argmax(1) == o.argmax(1)).mean())})
+    add("Opta supercomputer", [opta.get((r.home_team, r.away_team, r.date.strftime("%Y-%m-%d"))) for _, r in rp.iterrows()])
+    for prefix, label in (("PS", "Pinnacle"), ("BFE", "Betfair Exchange"), ("B365", "Bet365"), ("Avg", "Market average")):
+        add(label, [fair_market(r, prefix) for _, r in rp.iterrows()])
+    return out
+
+
+def log_value(fixtures: list, now: pd.Timestamp, m: pd.DataFrame) -> dict:
+    """Log each value bet the first time it appears, then settle it against the result and
+    the closing exchange price (closing line value)."""
+    rows = [{"logged_at": now.strftime("%Y-%m-%d %H:%M"), "date": f["date"], "home": f["home"], "away": f["away"],
+             "outcome": v["outcome"], "price": v["price"], "books": " / ".join(v["books"]),
+             "p_sharp": v["p_sharp"], "ev": v["ev"], "p_model": v["p_model"]}
+            for f in fixtures for v in f.get("value", [])]
+    hist = pd.read_csv(VALUE_LOG) if VALUE_LOG.exists() else pd.DataFrame()
+    new = pd.DataFrame(rows)
+    if len(hist) and len(new):
+        seen = set(zip(hist.date, hist.home, hist.away, hist.outcome))
+        new = new[[k not in seen for k in zip(new.date, new.home, new.away, new.outcome)]]
+    hist = pd.concat([hist, new], ignore_index=True)
+    if len(hist):
+        hist.to_csv(VALUE_LOG, index=False)
+    out = {"logged": int(len(hist)), "settled": 0, "bets": []}
+    if hist.empty:
+        return out
+    hist["d"] = pd.to_datetime(hist.date).dt.date
+    res = m.assign(d=m.date.dt.date)
+    s = hist.merge(res, on=["d", "home", "away"], how="left", suffixes=("", "_r"))
+    k = s.outcome.map({"home": 0, "draw": 1, "away": 2}).to_numpy()
+    won = (s.res.map({"H": 0, "D": 1, "A": 2}).to_numpy() == k)
+    settled = s.res.notna().to_numpy()
+
+    def closing(r, j):
+        for prefix in ("BFEC", "AvgC"):
+            p = mk.no_vig([r.get(f"{prefix}{x}") for x in mk.FD_SUFFIX])
+            if p:
+                return p[j]
+        return np.nan
+    p_close = np.array([closing(r, j) if ok else np.nan for (_, r), j, ok in zip(s.iterrows(), k, settled)])
+    pl = np.where(won, s.price - 1, -1.0)
+    clv = p_close * s.price - 1
+    sel = settled
+    out["settled"] = int(sel.sum())
+    if sel.any():
+        c = clv[sel][np.isfinite(clv[sel])]
+        se = c.std(ddof=1) / np.sqrt(len(c)) if len(c) > 1 else np.nan
+        out.update({"profit": r4(pl[sel].sum()), "roi": r4(pl[sel].mean()), "wins": int(won[sel].sum()),
+                    "clv": r4(c.mean()) if len(c) else None,
+                    "clv_lo": r4(c.mean() - 1.645 * se) if len(c) > 1 else None,
+                    "clv_hi": r4(c.mean() + 1.645 * se) if len(c) > 1 else None})
+    order = np.argsort(pd.to_datetime(s.date).to_numpy())[::-1]
+    out["bets"] = [{"date": s.date.iloc[i][:10], "home": s.home.iloc[i], "away": s.away.iloc[i],
+                    "outcome": s.outcome.iloc[i], "price": r4(s.price.iloc[i]), "books": s.books.iloc[i],
+                    "ev": r4(s.ev.iloc[i]), "settled": bool(settled[i]), "won": bool(won[i]) if settled[i] else None,
+                    "clv": None if not np.isfinite(clv[i]) else r4(clv[i])} for i in order[:60]]
+    return out
 
 
 def log_live(fixtures, now, m) -> dict:
     """Append this run's predictions; per match keep the earliest one made with odds."""
     HISTORY.parent.mkdir(exist_ok=True)
+    def src(f, label):
+        p = next((x["p"] for x in f.get("sources", []) if x["label"] == label), None)
+        return p or [None] * 3
+
     rows = pd.DataFrame([{"predicted_at": now.strftime("%Y-%m-%d %H:%M"), "date": f["date"],
                           "home": f["home"], "away": f["away"], "p_home": f["p"][0], "p_draw": f["p"][1],
                           "p_away": f["p"][2], "has_odds": f["odds"] is not None,
                           "odds_home": (f["odds"] or [None] * 3)[0], "odds_draw": (f["odds"] or [None] * 3)[1],
-                          "odds_away": (f["odds"] or [None] * 3)[2]} for f in fixtures])
+                          "odds_away": (f["odds"] or [None] * 3)[2],
+                          **{f"{tag}_{o}": src(f, label)[i] for tag, label in
+                             (("pin", "Pinnacle"), ("bfe", "Betfair Exchange"), ("b365", "Bet365"),
+                              ("opta", "Opta supercomputer"))
+                             for i, o in enumerate(("home", "draw", "away"))}} for f in fixtures])
     hist = pd.read_csv(HISTORY) if HISTORY.exists() else pd.DataFrame()
     if len(hist) and len(rows):
         # Only add a row if the match is new, or if it now has odds and no priced row exists yet.
