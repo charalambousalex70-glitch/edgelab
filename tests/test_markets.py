@@ -70,3 +70,16 @@ def test_opta_file_fills_missing_draw(tmp_path):
     f.write_text("Date,HomeTeam,AwayTeam,OptaH,OptaD,OptaA\n10/10/2026,Arsenal,Leeds,68.9,,13.7\n")
     p = mk.load_opta(f)[("Arsenal", "Leeds", "2026-10-10")]
     assert p == pytest.approx([0.689, 0.174, 0.137], abs=1e-6)
+
+
+def test_fixture_books_marks_best_price_and_live_overrides_friday():
+    row = _row(B365H=2.0, B365D=3.4, B365A=4.0, PPH=2.1, PPD=3.3, PPA=3.8, BFEH=2.2, BFED=3.6, BFEA=4.4)
+    api = {"paddypower": {"title": "Paddy Power", "odds": [2.05, 3.5, 3.9]},
+           "williamhill": {"title": "William Hill", "odds": [1.95, 3.4, 4.1]}}
+    books = {b["name"]: b for b in mk.fixture_books(row, api)}
+    assert books["Paddy Power"]["odds"] == [2.05, 3.5, 3.9] and books["Paddy Power"]["source"] == "live"
+    assert books["Paddy Power"]["best"] == [True, True, False]   # exchange never counts as best
+    assert books["William Hill"]["best"] == [False, False, True]
+    assert books["Betfair Exchange"]["exchange"] and books["Betfair Exchange"]["best"] == [False, False, False]
+    margins = [b["margin"] for b in mk.fixture_books(row, api)]
+    assert margins == sorted(margins)

@@ -201,3 +201,47 @@ def fixture_markets(row: pd.Series, api_books: dict | None, model_p: list, opta_
                               "fair_odds": 1 / p_sharp[k], "p_sharp": p_sharp[k], "ev": ev,
                               "quarter_kelly": kelly / 4, "p_model": model_p[k]})
     return {"sources": sources, "p_sharp": p_sharp, "best": best, "value": value}
+
+
+# ------------------------------------------------------------------ all bookmakers
+FD_DISPLAY = {"B365": "Bet365", "BFD": "Betfred", "BV": "BetVictor", "BW": "Bet&Win", "PP": "Paddy Power",
+              "SKB": "Sky Bet", "WH": "William Hill", "LB": "Ladbrokes", "BFE": "Betfair Exchange", "PS": "Pinnacle"}
+EXCHANGES = {"Betfair Exchange", "Betfair", "Matchbook", "Smarkets"}
+
+
+def book_key(name: str) -> str:
+    n = re.sub(r"[^a-z0-9]", "", name.lower())
+    return n[:-2] if n.endswith("uk") and len(n) > 4 else n
+
+
+def margin(odds) -> float | None:
+    o = np.asarray(odds, float)
+    if o.shape != (3,) or not np.isfinite(o).all() or (o <= 1).any():
+        return None
+    return float((1 / o).sum() - 1)
+
+
+def fixture_books(row: pd.Series, api_books: dict | None) -> list:
+    """Every bookmaker's 1X2 prices for one fixture. Live Odds API prices replace the
+    Friday football-data price for the same bookmaker."""
+    books: dict = {}
+    for prefix, name in FD_DISPLAY.items():
+        odds = [row.get(f"{prefix}{x}") for x in FD_SUFFIX]
+        if margin(odds) is not None:
+            books[book_key(name)] = {"name": name, "odds": [float(x) for x in odds], "source": "Friday"}
+    for key, b in (api_books or {}).items():
+        name = b["title"]
+        if margin(b["odds"]) is not None:
+            books[book_key(name)] = {"name": name, "odds": b["odds"], "source": "live"}
+    out = []
+    for b in books.values():
+        mg = margin(b["odds"])
+        out.append({**b, "margin": mg, "payout": 1 / (1 + mg),
+                    "exchange": b["name"] in EXCHANGES or "exchange" in b["name"].lower()})
+    bettable = [b for b in out if not b["exchange"]]
+    for k in range(3):
+        top = max((b["odds"][k] for b in bettable), default=None)
+        for b in out:
+            b.setdefault("best", [False, False, False])
+            b["best"][k] = (not b["exchange"]) and top is not None and b["odds"][k] >= top - 1e-9
+    return sorted(out, key=lambda b: b["margin"])

@@ -26,6 +26,7 @@ from edgelab import markets as mk
 ROOT = Path(__file__).parent
 DATA, PUBLIC, HISTORY = ROOT / "data", ROOT / "public", ROOT / "history" / "predictions.csv"
 VALUE_LOG = ROOT / "history" / "value_bets.csv"
+ODDS_LOG = ROOT / "history" / "odds_log.csv"
 OPTA = ROOT / "opta.csv"
 # Every odds column we keep: pre-match prices, and closing prices ("C") for settling value bets.
 ODDS_PREFIXES = list(mk.FD_BOOKS) + list(mk.FD_SHARP) + list(mk.FD_OTHER)
@@ -192,6 +193,8 @@ def build(cfg, now: pd.Timestamp) -> dict:
                         for x in mkts["sources"]]
         f["sharp"] = None if mkts["p_sharp"] is None else [r4(v) for v in mkts["p_sharp"]]
         f["best"] = mkts["best"]
+        f["books"] = [{**b, "odds": [r4(x) for x in b["odds"]], "margin": r4(b["margin"]), "payout": r4(b["payout"])}
+                      for b in mk.fixture_books(g, api_books.get((g.home, g.away)))]
         f["value"] = [{**v, **{k: r4(v[k]) for k in ("price", "fair_odds", "p_sharp", "ev", "quarter_kelly", "p_model")}}
                       for v in mkts["value"]]
 
@@ -230,15 +233,130 @@ def build(cfg, now: pd.Timestamp) -> dict:
 
     live = log_live(fixtures, now, m)
     value = log_value(fixtures, now, m)
+    log_odds(fixtures, now)
+    board = bookmaker_board(cfg, m, rp if len(season_m) else None)
     return {
         "generated": now.strftime("%Y-%m-%dT%H:%M"), "league": cfg["league"], "season": cur["label"],
         "last_result": m.date.max().strftime("%Y-%m-%d"), "fixtures_source": fx_source,
         "model": {"home": r4(fit.home), "rho": r4(fit.rho), "xi": xi, "matches": fit.n_matches,
                   "promoted_prior": [r4(np.exp(prior[0])), r4(np.exp(prior[1]))]},
         "fixtures": fixtures, "ratings": ratings, "record": record, "live": live, "value": value,
+        "board": board,
         "value_threshold": threshold, "odds_api": bool(api_books),
         "backtest": cfg.get("backtest"),
     }
+
+
+def _book_rows(odds: np.ndarray, o: np.ndarray, ll_ref: np.ndarray, best: np.ndarray | None, days) -> dict | None:
+    """Payout and accuracy stats for one bookmaker over the matches it priced."""
+    ok = np.isfinite(odds).all(1) & (odds > 1).all(1)
+    if ok.sum() < 10:
+        return None
+    inv = 1 / odds[ok]
+    tot = inv.sum(1)
+    p = inv / tot[:, None]
+    ll = -np.log((p * o[ok]).sum(1))
+    d = ll - ll_ref[ok]
+    se = d.std(ddof=1) / np.sqrt(len(d)) if len(d) > 1 else np.nan
+    row = {"n": int(ok.sum()), "margin": r4((tot - 1).mean()), "payout": r4((1 / tot).mean()),
+           "logloss": r4(ll.mean()), "vs_ref": r4(d.mean()), "vs_ref_ci": r4(1.645 * se) if np.isfinite(se) else None,
+           "best_share": None, "fav": r4((p.argmax(1) == o[ok].argmax(1)).mean())}
+    if best is not None:
+        row["best_share"] = r4(np.mean(np.isclose(odds[ok], best[ok])))
+    return row
+
+
+def bookmaker_board(cfg, m: pd.DataFrame, rp: pd.DataFrame | None) -> dict:
+    """Who pays the most (lowest margin, most often the best price) and who is the most
+    accurate (log loss of margin-free chances, against the market average on the same
+    matches), for this season, last season and every season loaded."""
+    o_all = np.stack([m.res == "H", m.res == "D", m.res == "A"], 1).astype(float)
+    avg = m[["AvgH", "AvgD", "AvgA"]].to_numpy(float)
+    p_avg = (1 / avg) / (1 / avg).sum(1, keepdims=True)
+    ll_avg = -np.log((p_avg * o_all).sum(1))
+    sportsbooks = [b for b in mk.FD_DISPLAY if b not in ("BFE", "PS")]
+    stack = np.stack([m[[f"{b}{x}" for x in mk.FD_SUFFIX]].to_numpy(float) for b in sportsbooks])
+    best = np.nanmax(np.where(np.isfinite(stack), stack, -np.inf), 0)
+    codes = [s["code"] for s in cfg["seasons"]]
+    cur, prev = cfg["current_season"], (codes[codes.index(cfg["current_season"]) - 1] if len(codes) > 1 else None)
+    labels = {s["code"]: s["label"] for s in cfg["seasons"]}
+    windows = [("season", f"This season ({labels[cur]})", m.season == cur)]
+    if prev:
+        windows.append(("last", f"Last season ({labels[prev]})", m.season == prev))
+    windows.append(("all", f"Since {labels[codes[0]].split('/')[0]}", m.season.notna()))
+    out = {"windows": []}
+    for key, label, mask in windows:
+        mask = mask.to_numpy()
+        rows = []
+        for prefix, name in list(mk.FD_DISPLAY.items()) + [("Avg", "Market average")]:
+            od = m[[f"{prefix}{x}" for x in mk.FD_SUFFIX]].to_numpy(float).copy()
+            od[~mask] = np.nan
+            r = _book_rows(od, o_all, ll_avg, best if prefix in sportsbooks else None, m.date)
+            if r:
+                rows.append({"name": name, "exchange": prefix == "BFE", "reference": prefix == "Avg", **r})
+        if key == "season" and rp is not None and len(rp):
+            pm = rp[["home", "draw", "away"]].to_numpy()
+            o = np.stack([rp.res == "H", rp.res == "D", rp.res == "A"], 1).astype(float)
+            ra = rp[["AvgH", "AvgD", "AvgA"]].to_numpy(float)
+            ok = np.isfinite(ra).all(1)
+            if ok.any():
+                pa = (1 / ra[ok]) / (1 / ra[ok]).sum(1, keepdims=True)
+                ll = -np.log((pm[ok] * o[ok]).sum(1)); d = ll + np.log((pa * o[ok]).sum(1))
+                rows.append({"name": "EdgeLab model", "model": True, "n": int(ok.sum()), "margin": None, "payout": None,
+                             "logloss": r4(ll.mean()), "vs_ref": r4(d.mean()),
+                             "vs_ref_ci": r4(1.645 * d.std(ddof=1) / np.sqrt(len(d))) if ok.sum() > 1 else None,
+                             "best_share": None, "fav": r4((pm[ok].argmax(1) == o[ok].argmax(1)).mean())})
+        out["windows"].append({"key": key, "label": label, "rows": rows})
+    out["live"] = live_board(m)
+    return out
+
+
+def log_odds(fixtures: list, now: pd.Timestamp) -> None:
+    """Save the first live snapshot of every bookmaker's prices for each match (all books
+    from the same moment, so they can be compared fairly once the result is in)."""
+    rows = [{"logged_at": now.strftime("%Y-%m-%d %H:%M"), "date": f["date"], "home": f["home"], "away": f["away"],
+             "book": b["name"], "exchange": b["exchange"], "h": b["odds"][0], "d": b["odds"][1], "a": b["odds"][2]}
+            for f in fixtures for b in f.get("books", []) if b["source"] == "live"]
+    if not rows:
+        return
+    new = pd.DataFrame(rows)
+    hist = pd.read_csv(ODDS_LOG) if ODDS_LOG.exists() else pd.DataFrame()
+    if len(hist):
+        seen = set(zip(hist.date, hist.home, hist.away))
+        new = new[[k not in seen for k in zip(new.date, new.home, new.away)]]
+    if len(new):
+        pd.concat([hist, new], ignore_index=True).to_csv(ODDS_LOG, index=False)
+
+
+def live_board(m: pd.DataFrame) -> list:
+    """Payout and accuracy for every bookmaker in the live log, on settled matches.
+    Accuracy is against the average of all logged bookmakers on the same matches."""
+    if not ODDS_LOG.exists():
+        return []
+    h = pd.read_csv(ODDS_LOG)
+    h["d0"] = pd.to_datetime(h.date).dt.date
+    res = m.assign(d0=m.date.dt.date)[["d0", "home", "away", "res"]]
+    s = h.merge(res, on=["d0", "home", "away"])
+    if s.empty:
+        return []
+    s["key"] = s.date + s.home + s.away
+    inv = 1 / s[["h", "d", "a"]].to_numpy(float)
+    s[["ph", "pd", "pa"]] = inv / inv.sum(1, keepdims=True)
+    s["won_p"] = np.choose(s.res.map({"H": 0, "D": 1, "A": 2}).to_numpy(), s[["ph", "pd", "pa"]].to_numpy().T)
+    s["ll"] = -np.log(s.won_p)
+    s["ll_ref"] = s.groupby("key").ll.transform("mean")
+    s["mg"] = inv.sum(1) - 1
+    best = s[~s.exchange.astype(bool)].groupby("key")[["h", "d", "a"]].max()
+    rows = []
+    for name, g in s.groupby("book"):
+        d = (g.ll - g.ll_ref).to_numpy()
+        bb = best.loc[g.key]
+        share = None if bool(g.exchange.iloc[0]) else r4(np.isclose(g[["h", "d", "a"]].to_numpy(), bb.to_numpy()).mean())
+        rows.append({"name": name, "exchange": bool(g.exchange.iloc[0]), "n": int(len(g)), "margin": r4(g.mg.mean()),
+                     "payout": r4((1 / (1 + g.mg)).mean()), "logloss": r4(g.ll.mean()), "vs_ref": r4(d.mean()),
+                     "vs_ref_ci": r4(1.645 * d.std(ddof=1) / np.sqrt(len(d))) if len(d) > 1 else None,
+                     "best_share": share})
+    return sorted(rows, key=lambda r: r["margin"])
 
 
 def load_odds_api(teams: list[str], fx: pd.DataFrame, now: pd.Timestamp) -> dict:

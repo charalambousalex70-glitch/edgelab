@@ -94,6 +94,10 @@ details.fx summary::-webkit-details-marker { display:none; }
 .cmp td small { display:block; color:var(--faint); font-size:.72rem; }
 .cmp tr.sharp td { font-weight:600; }
 .cmp tr.mine td:first-child { color:var(--primary); font-weight:600; }
+.cmp td.best { color:var(--pos); font-weight:600; }
+.cmp tr.ref td, .cmp tr.mine2 td { background:var(--panel); }
+.cmp tr.exch td:first-child small, .cmp td:first-child small { display:block; color:var(--faint); font-size:.72rem; font-weight:400; }
+.better { color:var(--pos); } .worse { color:var(--neg); } .same { color:var(--muted); }
 .valbox { border:1px solid var(--pos); border-radius:8px; padding:.65rem .8rem; }
 .valbox h4 { margin:0 0 .25rem; font-size:.95rem; color:var(--pos); }
 .valbox p { margin:.15rem 0; font-size:.85rem; color:var(--muted); }
@@ -161,7 +165,7 @@ const dayName = (s) => parseLocal(s).toLocaleDateString("en-GB", { weekday: "lon
 const shortDay = (s) => parseLocal(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 const hhmm = (s) => s.slice(11, 16);
 
-const TABS = [["fixtures", "This round"], ["ratings", "Ratings"], ["record", "Record"], ["about", "About"]];
+const TABS = [["fixtures", "This round"], ["books", "Bookmakers"], ["ratings", "Ratings"], ["record", "Record"], ["about", "About"]];
 function tab() { const h = location.hash.slice(1); return TABS.some(([k]) => k === h) ? h : "fixtures"; }
 function renderTabs() {
   $("#tabs").innerHTML = TABS.map(([k, l]) => `<button role="tab" aria-selected="${k === tab()}" data-tab="${k}">${l}</button>`).join("");
@@ -197,6 +201,15 @@ function compareTable(f) {
   return `<div><div class="diff" style="margin-bottom:.35rem">Who thinks what (chance of each result; bookmaker odds underneath, margin removed from the chances)</div>
     <div class="cs-scroll"><table class="cmp"><thead><tr><th>Source</th><th>${esc(f.home)}</th><th>Draw</th><th>${esc(f.away)}</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="diff cs-note">Bold rows are the sharp yardstick: the betting exchange${f.sources.some((x) => x.label === "Pinnacle") ? " and Pinnacle" : ""}, where prices carry almost no margin.</p></div>`;
+}
+function booksTable(f) {
+  if (!f.books || !f.books.length) return "";
+  const best = f.books.filter((b) => !b.exchange).sort((a, b) => b.payout - a.payout)[0];
+  const rows = f.books.map((b) => `<tr class="${b.exchange ? "exch" : ""}"><td>${esc(b.name)}${b.exchange ? "<small>exchange, before commission</small>" : b.source === "live" ? "<small>live</small>" : ""}</td>
+    ${b.odds.map((x, k) => `<td class="${b.best[k] ? "best" : ""}">${x.toFixed(2)}</td>`).join("")}<td>${pc(b.payout, 1)}</td></tr>`).join("");
+  return `<div><div class="diff" style="margin-bottom:.35rem">Every bookmaker's odds. Green is the best price for that result; payout is the share of stakes a bookmaker pays back on average.</div>
+    <div class="cs-scroll"><table class="cmp"><thead><tr><th>Bookmaker</th><th>${esc(f.home)}</th><th>Draw</th><th>${esc(f.away)}</th><th>Payout</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${best ? `<p class="diff cs-note">Best overall payout on this match: <strong>${esc(best.name)}</strong> (${pc(best.payout, 1)}). Prices marked live come from The Odds API; the rest were collected on ${f.books.some((b) => b.source === "live") ? "Friday or Tuesday" : "Friday (weekend games) or Tuesday (midweek)"}.</p>` : ""}</div>`;
 }
 function valueBox(f) {
   if (!f.value || !f.value.length) return "";
@@ -260,6 +273,7 @@ function viewFixtures() {
       </dl>
       ${valueBox(f)}
       ${compareTable(f)}
+      ${booksTable(f)}
       ${f.sharp ? biggestGap(f.p, f.sharp, "the betting exchange") : biggestGap(f.p, f.market)}
       <div><div class="diff" style="margin-bottom:.35rem">Most likely scores</div><div class="scores">${f.scores.map(([i, j, q]) => `<span>${i}-${j} ${pc(q)}</span>`).join("")}</div></div>
       ${gridBlock(f, idx)}
@@ -307,6 +321,37 @@ function viewRecord() {
     }).join("")}`;
 }
 
+let boardWin = "season";
+function fmtVs(r) {
+  if (r.reference) return `<span class="same">reference</span>`;
+  if (r.vs_ref == null) return "–";
+  const ci = r.vs_ref_ci, clear = ci != null && Math.abs(r.vs_ref) > ci;
+  const cls = !clear ? "same" : r.vs_ref < 0 ? "better" : "worse";
+  const v = Math.abs(r.vs_ref) < 0.0005 ? "0.000" : (r.vs_ref > 0 ? "+" : "") + r.vs_ref.toFixed(3);
+  return `<span class="${cls}">${v}</span>${ci != null ? `<small>±${ci.toFixed(3)}</small>` : ""}`;
+}
+function boardTable(rows, withBest = true) {
+  const sorted = [...rows].sort((a, b) => (b.payout ?? -1) - (a.payout ?? -1));
+  return `<div class="cs-scroll"><table class="cmp"><thead><tr><th>Bookmaker</th><th>Payout</th>${withBest ? "<th>Best price</th>" : ""}<th>Accuracy</th></tr></thead><tbody>
+    ${sorted.map((r) => `<tr class="${r.reference ? "ref" : r.model ? "mine2 mine" : ""}"><td>${esc(r.name)}<small>${r.n} matches${r.exchange ? ", exchange" : r.model ? ", our model" : ""}</small></td>
+      <td>${r.payout != null ? pc(r.payout, 1) : "–"}</td>${withBest ? `<td>${r.best_share != null ? pc(r.best_share) : "–"}</td>` : ""}<td>${fmtVs(r)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+function viewBooks() {
+  const b = DATA.board;
+  if (!b) return `<h2>Bookmakers</h2><p class="empty">No bookmaker data yet.</p>`;
+  const w = b.windows.find((x) => x.key === boardWin) || b.windows[0];
+  const ranked = w.rows.filter((r) => r.best_share != null && r.n >= 50).sort((a, c) => c.payout - a.payout);
+  const top = ranked[0], bottom = ranked[ranked.length - 1];
+  return `<h2>Bookmakers compared</h2>
+    <p class="lede">Who pays the most, and whose odds are closest to what actually happens, for every Premier League match in the data.</p>
+    <span class="seg" role="group" aria-label="Period">${b.windows.map((x) => `<button type="button" data-win="${x.key}" aria-pressed="${x.key === w.key}">${esc(x.label)}</button>`).join("")}</span>
+    ${top ? `<p class="note" style="margin-top:1rem"><strong>${esc(top.name)}</strong> paid the most, returning ${pc(top.payout, 1)} of stakes on average and offering the best price ${pc(top.best_share)} of the time. <strong>${esc(bottom.name)}</strong> paid the least (${pc(bottom.payout, 1)}). On accuracy the bookmakers are almost identical: they copy each other's prices.</p>` : ""}
+    ${boardTable(w.rows)}
+    <p class="diff cs-note"><strong>Payout</strong>: the share of all money staked that a bookmaker pays back on average, 100% minus its margin. Higher is better for you. <strong>Best price</strong>: how often its odds were the highest of the bookmakers listed, for each result. <strong>Accuracy</strong>: the bookmaker's log loss (margin removed) minus the market average's on the same matches. Below zero means more accurate; grey means the difference is inside the ± range, so it could be luck. The exchange pays commission on winnings (usually 2% to 5%), not shown in its payout.</p>
+    <h3 class="day">Live tracker</h3>
+    ${b.live && b.live.length ? `${boardTable(b.live)}<p class="diff cs-note">Every bookmaker's price saved at the same moment before kick-off from The Odds API, scored once the result is in. Accuracy here is against the average of these bookmakers.</p>`
+      : `<p class="diff">${DATA.odds_api ? "Live prices are being saved before each match; this table fills in once those matches are played." : "Switches on when The Odds API key is added. It covers Pinnacle, Betfair Sportsbook, William Hill, Paddy Power, Sky Bet, Ladbrokes, Coral, Betfred, BetVictor, Betway, Unibet and more, each saved at the same moment before kick-off and scored after the result."}</p>`}`;
+}
 function sourceBoard(r) {
   if (!r.sources || r.sources.length < 2) return "";
   const rows = r.sources.map((x) => `<tr${x.label === "EdgeLab model" ? ' class="mine"' : ""}><td>${esc(x.label)}</td><td>${x.n}</td><td>${x.logloss.toFixed(3)}</td><td>${x.label === "EdgeLab model" ? "–" : x.model_same.toFixed(3)}</td><td>${pc(x.fav)}</td></tr>`).join("");
@@ -344,9 +389,10 @@ function viewAbout() {
     <p>If you bet, only bet what you can afford to lose. You must be 18 or over. Free, confidential help is available from <a href="https://www.begambleaware.org" rel="noopener">BeGambleAware</a>.</p></div>`;
 }
 
-const VIEWS = { fixtures: viewFixtures, ratings: viewRatings, record: viewRecord, about: viewAbout };
+const VIEWS = { fixtures: viewFixtures, books: viewBooks, ratings: viewRatings, record: viewRecord, about: viewAbout };
 function render() {
   renderTabs(); $("#main").innerHTML = VIEWS[tab()]();
+  document.querySelectorAll("[data-win]").forEach((b) => (b.onclick = () => { boardWin = b.dataset.win; render(); }));
   document.querySelectorAll("[data-cs]").forEach((b) => (b.onclick = () => {
     const i = +b.dataset.cs, mode = b.dataset.mode;
     $("#cs-" + i).innerHTML = grid(DATA.fixtures[i].grid, mode);
