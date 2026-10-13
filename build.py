@@ -168,7 +168,9 @@ def build(cfg, now: pd.Timestamp) -> dict:
     if unknown:
         raise SystemExit(f"Unknown team names in fixtures (fix spelling to match football-data): {unknown}")
     opta = mk.load_opta(OPTA)
-    api_books = load_odds_api(teams_now, fx, now)
+    events = load_odds_api()
+    api_books = mk.parse_odds_api(events, set(teams_now)) if events else {}
+    fx, fx_source = add_api_fixtures(fx, fx_source, events, set(teams_now), now, m)
     threshold = cfg.get("value_threshold", 0.02)
     fixtures = []
     for _, g in fx.iterrows():
@@ -359,21 +361,54 @@ def live_board(m: pd.DataFrame) -> list:
     return sorted(rows, key=lambda r: r["margin"])
 
 
-def load_odds_api(teams: list[str], fx: pd.DataFrame, now: pd.Timestamp) -> dict:
-    """Live prices from The Odds API when a key is set and a fixture is within 8 days."""
+def load_odds_api() -> list | None:
+    """Live prices from The Odds API on every run when a key is set (2 credits a run).
+    The feed lists matches as soon as bookmakers price them, often a week or more ahead,
+    which is when soft prices are most likely."""
     import os
 
     cache = DATA / "odds_api.json"
     key = os.environ.get("ODDS_API_KEY", "").strip()
-    events = None
-    if key and len(fx) and (fx.date.min() - now) <= timedelta(days=8):
+    if key:
         try:
-            events = mk.fetch_odds_api(key, cache)
+            return mk.fetch_odds_api(key, cache)
         except Exception as exc:  # never let the optional feed break the site
             print(f"The Odds API failed ({exc}); continuing with football-data prices only")
-    elif cache.exists() and not key:
-        events = json.loads(cache.read_text())  # local runs with a saved payload
-    return mk.parse_odds_api(events, set(teams)) if events else {}
+            return None
+    if cache.exists():
+        return json.loads(cache.read_text())  # local runs with a saved payload
+    return None
+
+
+def add_api_fixtures(fx: pd.DataFrame, source: str, events: list | None, known: set, now: pd.Timestamp,
+                     results: pd.DataFrame, days_ahead: int = 10) -> tuple[pd.DataFrame, str]:
+    """Add upcoming matches that The Odds API already prices but football-data has not
+    listed yet, so value can be spotted early in the week."""
+    if not events:
+        return fx, source
+    have = set(zip(fx.home, fx.away)) if len(fx) else set()
+    played = set(zip(results.home, results.away, results.season))
+    season = results.season.iloc[-1] if len(results) else None
+    rows = []
+    for ev in events:
+        h, a = mk.map_team(ev["home_team"], known), mk.map_team(ev["away_team"], known)
+        if h is None or a is None or (h, a) in have or (h, a, season) in played:
+            continue
+        kick = pd.Timestamp(ev["commence_time"]).tz_convert("Europe/London").tz_localize(None)
+        if not (now <= kick <= now + timedelta(days=days_ahead)):
+            continue
+        have.add((h, a))
+        rows.append({"date": kick, "home": h, "away": a})
+    if not rows:
+        return fx, source
+    print(f"Added {len(rows)} fixtures from The Odds API that football-data has not listed yet")
+    extra = pd.DataFrame(rows)
+    out = pd.concat([fx, extra], ignore_index=True) if len(fx) else extra
+    for c in ODDS_COLS:
+        if c not in out:
+            out[c] = np.nan
+    label = source if len(fx) else "The Odds API (live prices)"
+    return out.sort_values("date").reset_index(drop=True), label
 
 
 def source_accuracy(rp: pd.DataFrame, o: np.ndarray, pm: np.ndarray, opta: dict) -> list:
@@ -400,6 +435,26 @@ def source_accuracy(rp: pd.DataFrame, o: np.ndarray, pm: np.ndarray, opta: dict)
     return out
 
 
+def write_alert(new: pd.DataFrame) -> None:
+    """data/alert.md lists value bets found for the first time this run; the workflow turns
+    it into a GitHub issue, which GitHub sends to the owner by email and to its mobile app."""
+    alert = DATA / "alert.md"
+    alert.unlink(missing_ok=True)
+    if new is None or not len(new):
+        return
+    names = {"home": None, "draw": "Draw", "away": None}
+    lines = ["New value bets found by EdgeLab (prices beat the betting exchange's fair price):", ""]
+    for _, r in new.iterrows():
+        pick = names[r.outcome] or f"{r.home if r.outcome == 'home' else r.away} to win"
+        lines.append(f"- **{pick}** ({r.home} v {r.away}, {pd.Timestamp(r.date):%a %d %b %H:%M} UK): "
+                     f"{r.price:.2f} with {r.books}, fair price {1 / r.p_sharp:.2f}, value +{r.ev * 100:.1f}%")
+    lines += ["", "Prices move fast; check the bookmaker before betting. Full details on the site.",
+              "18+. Only bet what you can afford to lose."]
+    DATA.mkdir(exist_ok=True)
+    alert.write_text("\n".join(lines) + "\n")
+    (DATA / "alert_title.txt").write_text(f"{len(new)} new value bet{'s' if len(new) != 1 else ''}")
+
+
 def log_value(fixtures: list, now: pd.Timestamp, m: pd.DataFrame) -> dict:
     """Log each value bet the first time it appears, then settle it against the result and
     the closing exchange price (closing line value)."""
@@ -415,6 +470,7 @@ def log_value(fixtures: list, now: pd.Timestamp, m: pd.DataFrame) -> dict:
     hist = pd.concat([hist, new], ignore_index=True)
     if len(hist):
         hist.to_csv(VALUE_LOG, index=False)
+    write_alert(new)
     out = {"logged": int(len(hist)), "settled": 0, "bets": []}
     if hist.empty:
         return out

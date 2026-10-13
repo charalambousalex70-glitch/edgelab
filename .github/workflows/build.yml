@@ -2,9 +2,8 @@ name: Update forecasts
 
 on:
   schedule:
-    - cron: "0 6 * * *"      # every morning: picks up new results
-    - cron: "0 18 * * 5"     # Friday evening: weekend odds are published Friday afternoon
-    - cron: "0 15 * * 2"     # Tuesday afternoon: midweek odds
+    - cron: "0 6 * * *"      # every morning (09:00 Cyprus): new results and fresh odds
+    - cron: "0 17 * * *"     # every evening (20:00 Cyprus): fresh odds; Friday/Tuesday football-data odds
   workflow_dispatch:          # "Run workflow" button for a manual update
   push:                       # rebuild whenever the code or settings change
     branches: [main]
@@ -12,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
   pages: write
   id-token: write
 
@@ -42,6 +42,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add history/
           git diff --cached --quiet || (git commit -m "Log predictions and value bets" && git push)
+      - name: Alert on new value bets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f data/alert.md ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "EdgeLab: $(cat data/alert_title.txt)" --body-file data/alert.md
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
