@@ -108,16 +108,21 @@ def load_fixtures(cfg, results: pd.DataFrame, now: pd.Timestamp) -> tuple[pd.Dat
                 for h, a, dt in zip(out.home, out.away, out.date)]
         return out[keep].sort_values("date").reset_index(drop=True)
 
-    if (DATA / "fixtures.csv").exists():
-        fx = tidy(read_csv_text((DATA / "fixtures.csv").read_bytes()))
-        if len(fx):
-            return fx, "football-data.co.uk (with bookmaker odds)"
-    manual = ROOT / "fixtures_manual.csv"
-    if manual.exists():
-        fx = tidy(pd.read_csv(manual))
-        if len(fx):
-            return fx, "fixtures_manual.csv (no odds yet)"
-    return pd.DataFrame(columns=["date", "home", "away"]), "none"
+    fd = tidy(read_csv_text((DATA / "fixtures.csv").read_bytes())) if (DATA / "fixtures.csv").exists() else pd.DataFrame()
+    manual_path = ROOT / "fixtures_manual.csv"
+    manual = tidy(pd.read_csv(manual_path)) if manual_path.exists() else pd.DataFrame()
+    # Hand-typed fixtures always show; football-data's row (with odds) wins for the same match.
+    if len(fd) and len(manual):
+        have = set(zip(fd.home, fd.away))
+        manual = manual[[k not in have for k in zip(manual.home, manual.away)]]
+    parts = [x for x in (fd, manual) if len(x)]
+    if not parts:
+        return pd.DataFrame(columns=["date", "home", "away"]), "none"
+    fx = pd.concat(parts, ignore_index=True).sort_values("date").reset_index(drop=True)
+    source = ("football-data.co.uk (with bookmaker odds)" if len(fd) and not len(manual) else
+              "fixtures_manual.csv (odds arrive Friday)" if not len(fd) else
+              "football-data.co.uk and fixtures_manual.csv")
+    return fx, source
 
 
 # ------------------------------------------------------------------ model
