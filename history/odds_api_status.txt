@@ -1,1 +1,1 @@
-2026-10-14 09:03 UTC: no ODDS_API_KEY secret visible to this run
+2026-10-14 09:24 UTC: ok, 40 events across uk+eu, credits left 498

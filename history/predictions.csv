@@ -29,3 +29,4 @@ predicted_at,date,home,away,p_home,p_draw,p_away,has_odds,odds_home,odds_draw,od
 2026-10-14 07:17,2026-10-18T14:00,Leeds,Man United,0.393,0.282,0.325,False,,,,,,,,,,,,,,,
 2026-10-14 07:17,2026-10-18T16:30,Nott'm Forest,Arsenal,0.1676,0.2752,0.5571,False,,,,,,,,,,,,,,,
 2026-10-14 07:17,2026-10-19T20:00,Tottenham,Coventry,0.5669,0.2501,0.1831,False,,,,,,,,,,,,,,,
+2026-10-14 09:24,2026-10-23T20:00,Ipswich,Nott'm Forest,0.2147,0.2556,0.5297,False,,,,0.3109,0.268,0.421,0.3082,0.2734,0.4184,,,,,,
