@@ -244,7 +244,13 @@ def build(cfg, now: pd.Timestamp) -> dict:
             } for _, r in rp.sort_values("date", ascending=False).iterrows()],
         }
 
-    mv = moves.analyse(snap, now, threshold)
+    try:
+        mv = moves.analyse(snap, now, threshold)
+    except Exception as exc:  # the analysis must never stop the site (or the snapshot commit)
+        print(f"Market moves analysis failed: {exc!r}")
+        mv = {"fetches": int(snap.fetched.nunique()) if len(snap) else 0, "error": str(exc)[:200], "matches": [],
+              "books": [], "timing": [], "clv_time": [], "events": 0, "closed": 0, "move_min": 0.015,
+              "first": None, "last": None}
     for f in fixtures:
         for v in f["value"]:
             v["why"] = moves.context(mv["matches"], f["home"], f["away"], v["k"], v["books"])

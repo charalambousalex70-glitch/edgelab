@@ -25,6 +25,7 @@ import pandas as pd
 from .snapshots import EXCHANGE_KEYS, SHARP_KEYS
 
 P = ["p0", "p1", "p2"]
+EVENT_COLS = ["match", "book", "t1", "k", "dq", "gap_h", "follow", "lag_h", "status", "confirmed", "ev_after"]
 BUCKETS = [(72, 1e9, "Over 3 days"), (24, 72, "1 to 3 days"), (6, 24, "6 to 24 hours"), (0, 6, "Last 6 hours")]
 SEGMENTS = [(None, 72, "Opening to 3 days before"), (72, 24, "3 days to 1 day before"),
             (24, 6, "Last day, to 6 hours before"), (6, 1, "6 hours to 1 hour before"),
@@ -120,7 +121,7 @@ def lag_events(s: pd.DataFrame, sp: pd.DataFrame, latest: pd.Timestamp, move_min
                             "follow": float(np.clip((BP[i, k] - base) / dq, -0.5, 1.5)),
                             "lag_h": lag, "status": status, "confirmed": bool(confirmed),
                             "ev_after": GQ[gi[i], k] * BO[i, k] - 1})
-    return pd.DataFrame(out)
+    return pd.DataFrame(out, columns=EVENT_COLS)
 
 
 def _mean_ci(x, cluster=None):

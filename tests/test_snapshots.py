@@ -101,3 +101,11 @@ def test_focus_keys_map_titles_from_the_last_full_snapshot():
     st = {"book_keys": {"William Hill": "williamhill", "Betfred (UK)": "betfred_uk", "Pinnacle": "pinnacle"}}
     keys = snaps.focus_keys(st, {"focus_books": ["William Hill", "Betfred", "Nobody"]})
     assert keys == ["pinnacle", "betfair_ex_uk", "williamhill", "betfred_uk"]
+
+
+def test_analysis_copes_with_a_single_snapshot():
+    ts, kick = "2026-10-14 08:00", "2026-10-17 14:00"
+    snap = _snap([[ts, "full", kick, "Arsenal", "Leeds", k, t, ts, 2.0, 3.6, 4.0]
+                  for k, t in (("pinnacle", "Pinnacle"), ("williamhill", "William Hill"))])
+    out = moves.analyse(snap, pd.Timestamp("2026-10-14 09:00"), 0.02)
+    assert out["fetches"] == 1 and out["books"][0]["moves"] == 0 and out["matches"][0]["n"] == 1
