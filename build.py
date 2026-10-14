@@ -374,12 +374,24 @@ def load_odds_api() -> list | None:
 
     cache = DATA / "odds_api.json"
     key = os.environ.get("ODDS_API_KEY", "").strip()
+    status = ROOT / "history" / "odds_api_status.txt"
+
+    def note(msg: str) -> None:  # committed with the history so problems are visible without logs
+        status.write_text(f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC: {msg}\n")
+        print(f"The Odds API: {msg}")
+
     if key:
         try:
-            return mk.fetch_odds_api(key, cache)
+            events = mk.fetch_odds_api(key, cache)
+            note(f"ok, {len(events)} events across uk+eu, credits left {mk.CREDITS['remaining']}")
+            return events
         except Exception as exc:  # never let the optional feed break the site
-            print(f"The Odds API failed ({exc}); continuing with football-data prices only")
+            resp = getattr(exc, "response", None)
+            detail = f"HTTP {resp.status_code}: {resp.text[:200]}" if resp is not None else str(exc)[:200]
+            note(f"request failed ({detail}) - key length {len(key)}")
             return None
+    if os.environ.get("GITHUB_ACTIONS"):
+        note("no ODDS_API_KEY secret visible to this run")
     if cache.exists():
         return json.loads(cache.read_text())  # local runs with a saved payload
     return None
