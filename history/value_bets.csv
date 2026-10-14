@@ -2,3 +2,7 @@ logged_at,date,home,away,outcome,price,books,p_sharp,ev,p_model,why
 2026-10-14 09:24,2026-10-18T14:00,Bournemouth,Sunderland,away,3.85,1xBet,0.2677,0.0305,0.2487,
 2026-10-14 09:24,2026-10-18T14:00,Leeds,Man United,draw,3.85,Unibet (NL),0.2671,0.0283,0.282,
 2026-10-14 09:24,2026-10-18T16:30,Nott'm Forest,Arsenal,draw,4.2,Unibet (NL),0.2462,0.034,0.2752,
+2026-10-14 22:36,2026-10-17T15:00,Man City,Ipswich,away,13.0,Betfair Sportsbook / Unibet (NL) / Unibet (SE),0.0803,0.0437,0.0346,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
+2026-10-14 22:36,2026-10-17T17:30,Newcastle,Aston Villa,away,3.19,1xBet,0.3223,0.0281,0.3213,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
+2026-10-14 22:36,2026-10-18T14:00,Leeds,Man United,home,2.54,GTbets,0.4039,0.0258,0.393,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
+2026-10-14 22:36,2026-10-24T12:30,Aston Villa,Man City,home,4.9,Casumo / Unibet (NL) / Unibet (SE),0.2213,0.0843,0.2099,The sharp price for this result has shortened by 2.2 points in the last 12 hours; Casumo has not followed (still 1.65). Slow prices like this tend to be cut soon.
