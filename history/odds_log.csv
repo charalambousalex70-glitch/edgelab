@@ -541,3 +541,33 @@ logged_at,date,home,away,book,exchange,h,d,a
 2026-10-14 15:15,2026-10-24T15:00,Coventry,Fulham,Betclic (FR),False,2.73,3.35,2.2
 2026-10-14 15:15,2026-10-24T15:00,Coventry,Fulham,Unibet (FR),False,2.7,3.3,2.15
 2026-10-14 15:15,2026-10-24T15:00,Coventry,Fulham,Winamax (FR),False,2.6,3.3,2.15
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,1xBet,False,1.9,4.11,4.06
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Betfair,True,1.85,4.0,4.3
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Smarkets,True,1.86,3.95,4.1
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Unibet (SE),False,1.88,4.0,3.9
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Unibet (NL),False,1.88,4.0,3.9
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Casumo,False,1.88,4.0,3.9
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Marathon Bet,False,1.85,4.0,3.95
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Pinnacle,False,1.85,4.02,3.82
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Betsson,False,1.85,3.98,3.82
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Nordic Bet,False,1.85,4.0,3.8
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,LeoVegas (SE),False,1.85,3.95,3.8
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Grosvenor,False,1.85,3.95,3.8
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Tipico,False,1.77,4.1,4.0
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Betfred (UK),False,1.83,4.0,3.75
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Unibet (UK),False,1.84,3.9,3.75
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,888sport,False,1.83,3.8,3.8
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,BoyleSports,False,1.83,3.8,3.75
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Sky Bet,False,1.8,3.9,3.75
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Paddy Power,False,1.8,3.8,3.8
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,MyBookie.ag,False,1.82,3.8,3.7
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Virgin Bet,False,1.82,3.8,3.7
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,LiveScore Bet,False,1.82,3.8,3.7
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,William Hill,False,1.75,3.75,4.0
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,LeoVegas,False,1.8,3.85,3.65
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Winamax (DE),False,1.8,3.9,3.6
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Betway,False,1.8,3.8,3.6
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,PMU (FR),False,1.78,3.7,3.6
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Betclic (FR),False,1.76,3.6,3.63
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Unibet (FR),False,1.74,3.6,3.6
+2026-10-14 19:30,2026-10-24T17:30,Chelsea,Tottenham,Winamax (FR),False,1.72,3.6,3.35
