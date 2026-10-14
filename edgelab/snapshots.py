@@ -27,12 +27,12 @@ def fetch(key: str, mode: str, regions: list[str], focus_keys: list[str]) -> tup
     import requests
 
     calls = [{"bookmakers": ",".join(focus_keys)}] if mode == "focus" else [{"regions": r} for r in regions]
-    events, quota = [], {}
+    events, quota, cost = [], {}, 0
     for extra in calls:
         r = requests.get(URL, params={"apiKey": key, "markets": "h2h", "oddsFormat": "decimal", **extra}, timeout=60)
         r.raise_for_status()
-        quota = {"remaining": r.headers.get("x-requests-remaining"), "used": r.headers.get("x-requests-used"),
-                 "last": r.headers.get("x-requests-last")}
+        cost += int(float(r.headers.get("x-requests-last") or 0))
+        quota = {"remaining": r.headers.get("x-requests-remaining"), "used": r.headers.get("x-requests-used"), "last": cost}
         print(f"The Odds API {extra}: {len(r.json())} events, cost {quota['last']}, credits left {quota['remaining']}")
         events.extend(r.json())
     mk.CREDITS.update(remaining=quota.get("remaining"), used=quota.get("used"))
