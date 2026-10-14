@@ -52,10 +52,26 @@ promoted teams), set `current_season`, and drop the oldest season if you like.
 
 ## Daily odds checks and alerts
 
-With the `ODDS_API_KEY` secret set, every run (twice a day) pulls live prices for all
-upcoming Premier League matches from The Odds API, including matches football-data has
-not listed yet, so value shows up early in the week when prices are softest. Each run
-uses 2 API credits (about 120 a month).
+With the `ODDS_API_KEY` secret set, the workflow checks every 15 minutes (05:00-23:00
+UTC) whether to take an odds snapshot, following a plan that spends the 500 free
+credits a month evenly (`edgelab/schedule.py`):
+
+- **Full snapshot** (2 credits, every bookmaker in the uk and eu regions) every 12 hours.
+- **Focus snapshot** (1 credit, Pinnacle, the Betfair Exchange and the eight UK
+  bookmakers in `focus_books` in `config.json`) 90, 35 and 12 minutes before every
+  kick-off, and every 2 to 8 hours in between, spaced so the credits last to the reset.
+- Otherwise the site is rebuilt without new odds every 6 hours.
+
+Every snapshot is saved as a small file in `history/snapshots/YYYY-MM/` and never
+changed. The **Market moves** tab (`edgelab/moves.py`) uses them to show how the sharp
+price (Pinnacle and the exchange) has moved for each match, which bookmakers are slow to
+copy those moves, how much the price moves in each period before kick-off, and whether
+betting early beats the closing price. `history/snapshot_state.json` holds the
+scheduler's state (credits left, kick-off times, snapshots taken).
+
+To force a snapshot, open Actions > Update forecasts > Run workflow and pick full or focus.
+To change which bookmakers the focus snapshot follows, edit `focus_books` (names as the
+Odds API shows them, up to eight).
 
 When a run finds a value bet for the first time, it opens a GitHub issue titled
 "EdgeLab: N new value bets". GitHub emails the repository owner and notifies the GitHub

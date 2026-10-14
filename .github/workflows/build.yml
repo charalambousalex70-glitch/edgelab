@@ -1,11 +1,20 @@
 name: Update forecasts
 
+# A quick gate runs every 15 minutes (05:00-23:00 UTC) and decides, from
+# history/snapshot_state.json, whether this tick should take an odds snapshot
+# (full: 2 credits, focus: 1 credit), only rebuild the site, or do nothing.
+# See edgelab/schedule.py for the plan and the 500-credit budget.
 on:
   schedule:
-    - cron: "0 6 * * *"      # every morning (09:00 Cyprus): new results and fresh odds
-    - cron: "0 17 * * *"     # every evening (20:00 Cyprus): fresh odds; Friday/Tuesday football-data odds
-  workflow_dispatch:          # "Run workflow" button for a manual update
-  push:                       # rebuild whenever the code or settings change
+    - cron: "7,22,37,52 5-22 * * *"
+  workflow_dispatch:          # "Run workflow" button
+    inputs:
+      fetch:
+        description: "Odds snapshot (auto follows the budget plan)"
+        type: choice
+        options: [auto, full, focus, none]
+        default: auto
+  push:                       # rebuild whenever the code or settings change (no credits unless due)
     branches: [main]
     paths-ignore: ["history/**", "README.md"]
 
@@ -20,7 +29,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            edgelab
+            config.json
+            history/snapshot_state.json
+          sparse-checkout-cone-mode: false
+      - id: plan
+        run: |
+          python3 -m edgelab.schedule --event "${{ github.event_name }}" --force "${{ inputs.fetch || 'auto' }}" | tee -a "$GITHUB_OUTPUT"
+
   build:
+    needs: gate
+    if: needs.gate.outputs.mode != 'skip'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -36,12 +63,16 @@ jobs:
       - run: python build.py
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY || vars.ODDS_API_KEY }}
-      - name: Save the prediction history
+          FETCH_MODE: ${{ needs.gate.outputs.mode }}
+      - name: Save the prediction history and odds snapshots
         run: |
           git config user.name "edgelab-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add history/
-          git diff --cached --quiet || (git commit -m "Log predictions and value bets" && git push)
+          if ! git diff --cached --quiet; then
+            git commit -m "Odds snapshot (${{ needs.gate.outputs.mode }}) and history"
+            git pull --rebase --autostash && git push
+          fi
       - name: Alert on new value bets
         env:
           GH_TOKEN: ${{ github.token }}

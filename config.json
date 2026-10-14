@@ -54,5 +54,28 @@
   "odds_api_regions": [
     "uk",
     "eu"
-  ]
+  ],
+  "odds_api_reset_day": 1,
+  "focus_books": [
+    "William Hill",
+    "Paddy Power",
+    "Sky Bet",
+    "Ladbrokes",
+    "Betfred (UK)",
+    "Bet Victor",
+    "Betway",
+    "BoyleSports"
+  ],
+  "max_stale_h": 3,
+  "snapshots": {
+    "full_every_h": 12,
+    "milestones_min": [
+      90,
+      35,
+      12
+    ],
+    "min_gap_h": 2.0,
+    "max_gap_h": 8.0,
+    "reserve": 10
+  }
 }

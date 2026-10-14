@@ -22,11 +22,15 @@ import pandas as pd
 
 from edgelab import dixon_coles as dc
 from edgelab import markets as mk
+from edgelab import moves
+from edgelab import schedule as sched
+from edgelab import snapshots as snaps
 
 ROOT = Path(__file__).parent
 DATA, PUBLIC, HISTORY = ROOT / "data", ROOT / "public", ROOT / "history" / "predictions.csv"
 VALUE_LOG = ROOT / "history" / "value_bets.csv"
 ODDS_LOG = ROOT / "history" / "odds_log.csv"
+SNAP_DIR = ROOT / "history" / "snapshots"
 CFG: dict = {}
 OPTA = ROOT / "opta.csv"
 # Every odds column we keep: pre-match prices, and closing prices ("C") for settling value bets.
@@ -174,9 +178,9 @@ def build(cfg, now: pd.Timestamp) -> dict:
     if unknown:
         raise SystemExit(f"Unknown team names in fixtures (fix spelling to match football-data): {unknown}")
     opta = mk.load_opta(OPTA)
-    events = load_odds_api()
-    api_books = mk.parse_odds_api(events, set(teams_now)) if events else {}
-    fx, fx_source = add_api_fixtures(fx, fx_source, events, set(teams_now), now, m)
+    snap, state = odds_snapshot(set(teams_now), now)
+    api_books = snaps.latest_books(snap, now)
+    fx, fx_source = add_api_fixtures(fx, fx_source, snaps.upcoming(snap, now), set(teams_now), now, m)
     threshold = cfg.get("value_threshold", 0.02)
     fixtures = []
     for _, g in fx.iterrows():
@@ -196,7 +200,8 @@ def build(cfg, now: pd.Timestamp) -> dict:
         })
         f = fixtures[-1]
         mkts = mk.fixture_markets(g, api_books.get((g.home, g.away)), f["p"],
-                                  opta.get((g.home, g.away, g.date.strftime("%Y-%m-%d"))), threshold)
+                                  opta.get((g.home, g.away, g.date.strftime("%Y-%m-%d"))), threshold,
+                                  cfg.get("max_stale_h", 3))
         f["sources"] = [{**x, "p": [r4(v) for v in x["p"]], "odds": None if x["odds"] is None else [r4(v) for v in x["odds"]]}
                         for x in mkts["sources"]]
         f["sharp"] = None if mkts["p_sharp"] is None else [r4(v) for v in mkts["p_sharp"]]
@@ -239,6 +244,14 @@ def build(cfg, now: pd.Timestamp) -> dict:
             } for _, r in rp.sort_values("date", ascending=False).iterrows()],
         }
 
+    mv = moves.analyse(snap, now, threshold)
+    for f in fixtures:
+        for v in f["value"]:
+            v["why"] = moves.context(mv["matches"], f["home"], f["away"], v["k"], v["books"])
+    now_utc = now.tz_localize("UTC").to_pydatetime()
+    mv["plan"] = sched.plan(state, now_utc, cfg)
+    mv["recent"] = state.get("fetches", [])[-12:][::-1]
+    mv["focus_books"] = [t for t in cfg.get("focus_books", [])]
     live = log_live(fixtures, now, m)
     value = log_value(fixtures, now, m)
     log_odds(fixtures, now)
@@ -249,8 +262,9 @@ def build(cfg, now: pd.Timestamp) -> dict:
         "model": {"home": r4(fit.home), "rho": r4(fit.rho), "xi": xi, "matches": fit.n_matches,
                   "promoted_prior": [r4(np.exp(prior[0])), r4(np.exp(prior[1]))]},
         "fixtures": fixtures, "ratings": ratings, "record": record, "live": live, "value": value,
-        "board": board,
-        "value_threshold": threshold, "odds_api": bool(api_books), "odds_api_credits": mk.CREDITS["remaining"],
+        "board": board, "moves": mv,
+        "value_threshold": threshold, "odds_api": bool(api_books),
+        "odds_api_credits": mk.CREDITS["remaining"] or state.get("remaining"),
         "backtest": cfg.get("backtest"),
     }
 
@@ -367,35 +381,49 @@ def live_board(m: pd.DataFrame) -> list:
     return sorted(rows, key=lambda r: r["margin"])
 
 
-def load_odds_api() -> list | None:
-    """Live prices from The Odds API on every run when a key is set (2 credits a run).
-    The feed lists matches as soon as bookmakers price them, often a week or more ahead,
-    which is when soft prices are most likely."""
+def odds_snapshot(known: set, now: pd.Timestamp) -> tuple[pd.DataFrame, dict]:
+    """Take this run's Odds API snapshot (if the scheduler asked for one) and return every
+    snapshot saved so far, plus the scheduler's state.
+
+    FETCH_MODE comes from the workflow's gate: full (uk + eu regions, 2 credits), focus
+    (ten named bookmakers, 1 credit) or build (no request). Without FETCH_MODE a run with a
+    key takes a full snapshot."""
     import os
 
-    cache = DATA / "odds_api.json"
     key = os.environ.get("ODDS_API_KEY", "").strip()
+    mode = os.environ.get("FETCH_MODE", "").strip() or ("full" if key else "build")
     status = ROOT / "history" / "odds_api_status.txt"
+    state = sched.load_state()
+    now_utc = now.tz_localize("UTC").to_pydatetime()
+    due = sched.due_milestones(state, now_utc, CFG)
 
     def note(msg: str) -> None:  # committed with the history so problems are visible without logs
+        status.parent.mkdir(exist_ok=True)
         status.write_text(f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC: {msg}\n")
         print(f"The Odds API: {msg}")
 
-    if key:
+    rows = quota = None
+    if mode in ("full", "focus") and key:
+        keys = snaps.focus_keys(state, CFG) if mode == "focus" else []
+        if mode == "focus" and len(keys) < 4:
+            mode = "full"  # no full snapshot yet to learn the bookmakers' API keys from
         try:
-            events = mk.fetch_odds_api(key, cache, CFG.get("odds_api_regions", ["uk", "eu"]))
-            note(f"ok, {len(events)} events across uk+eu, credits left {mk.CREDITS['remaining']}")
-            return events
+            events, quota = snaps.fetch(key, mode, CFG.get("odds_api_regions", ["uk", "eu"]), keys)
+            rows = snaps.rows_from_events(events, known, now, mode)
+            snaps.save(rows, SNAP_DIR, now, mode)
+            note(f"ok, {mode} snapshot: {rows.book_key.nunique()} bookmakers on {rows.groupby(['home', 'away']).ngroups} "
+                 f"matches, cost {quota.get('last')}, credits left {quota.get('remaining')}")
         except Exception as exc:  # never let the optional feed break the site
             resp = getattr(exc, "response", None)
             detail = f"HTTP {resp.status_code}: {resp.text[:200]}" if resp is not None else str(exc)[:200]
-            note(f"request failed ({detail}) - key length {len(key)}")
-            return None
-    if os.environ.get("GITHUB_ACTIONS"):
+            note(f"{mode} request failed ({detail}) - key length {len(key)}")
+            rows = quota = None
+    elif mode in ("full", "focus") and os.environ.get("GITHUB_ACTIONS"):
         note("no ODDS_API_KEY secret visible to this run")
-    if cache.exists():
-        return json.loads(cache.read_text())  # local runs with a saved payload
-    return None
+    snap = snaps.load(SNAP_DIR)
+    state = snaps.update_state(sched.STATE, state, now, mode if quota else None, quota, rows, snap,
+                               due if quota else [])
+    return snap, state
 
 
 def add_api_fixtures(fx: pd.DataFrame, source: str, events: list | None, known: set, now: pd.Timestamp,
@@ -408,11 +436,11 @@ def add_api_fixtures(fx: pd.DataFrame, source: str, events: list | None, known: 
     played = set(zip(results.home, results.away, results.season))
     season = results.season.iloc[-1] if len(results) else None
     rows = []
-    for ev in events:
-        h, a = mk.map_team(ev["home_team"], known), mk.map_team(ev["away_team"], known)
-        if h is None or a is None or (h, a) in have or (h, a, season) in played:
+    for ev in events:  # {"home", "away", "commence" (naive UTC)} from the newest snapshot
+        h, a = ev["home"], ev["away"]
+        if h not in known or a not in known or (h, a) in have or (h, a, season) in played:
             continue
-        kick = pd.Timestamp(ev["commence_time"]).tz_convert("Europe/London").tz_localize(None)
+        kick = pd.Timestamp(ev["commence"]).tz_localize("UTC").tz_convert("Europe/London").tz_localize(None)
         if not (now <= kick <= now + timedelta(days=days_ahead)):
             continue
         have.add((h, a))
@@ -466,6 +494,8 @@ def write_alert(new: pd.DataFrame) -> None:
         pick = names[r.outcome] or f"{r.home if r.outcome == 'home' else r.away} to win"
         lines.append(f"- **{pick}** ({r.home} v {r.away}, {pd.Timestamp(r.date):%a %d %b %H:%M} UK): "
                      f"{r.price:.2f} with {r.books}, fair price {1 / r.p_sharp:.2f}, value +{r.ev * 100:.1f}%")
+        if isinstance(r.get("why"), str):
+            lines.append(f"  {r.why}")
     lines += ["", "Prices move fast; check the bookmaker before betting. Full details on the site.",
               "18+. Only bet what you can afford to lose."]
     DATA.mkdir(exist_ok=True)
@@ -478,7 +508,7 @@ def log_value(fixtures: list, now: pd.Timestamp, m: pd.DataFrame) -> dict:
     the closing exchange price (closing line value)."""
     rows = [{"logged_at": now.strftime("%Y-%m-%d %H:%M"), "date": f["date"], "home": f["home"], "away": f["away"],
              "outcome": v["outcome"], "price": v["price"], "books": " / ".join(v["books"]),
-             "p_sharp": v["p_sharp"], "ev": v["ev"], "p_model": v["p_model"]}
+             "p_sharp": v["p_sharp"], "ev": v["ev"], "p_model": v["p_model"], "why": v.get("why")}
             for f in fixtures for v in f.get("value", [])]
     hist = pd.read_csv(VALUE_LOG) if VALUE_LOG.exists() else pd.DataFrame()
     new = pd.DataFrame(rows)

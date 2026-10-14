@@ -130,6 +130,19 @@ table.r .n { text-align:right; }
 .res .meta { grid-column: 1 / -1; font-size:.8rem; color:var(--faint); }
 .ok { color:var(--pos); } .miss { color:var(--neg); }
 
+.mcard { border-top:1px solid var(--line); padding:.8rem 0 .9rem; }
+.mcard .teams { font-size:1rem; }
+.spark { display:block; width:100%; height:64px; margin:.45rem 0 .2rem; }
+.spark line.base { stroke:var(--line); }
+.mrow { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:.4rem; font-size:.8rem; color:var(--faint); font-variant-numeric: tabular-nums; }
+.mrow b { display:block; color:var(--text); font-weight:600; font-size:.9rem; }
+.lagbox { margin-top:.5rem; font-size:.82rem; color:var(--muted); background:var(--panel); border-radius:6px; padding:.45rem .6rem; }
+.lagbox strong { color:var(--text); }
+.hbar { display:grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) 3.2rem; gap:.5rem; align-items:center; font-size:.82rem; padding:.25rem 0; }
+.hbar .track { background:var(--panel); border-radius:3px; height:.7rem; position:relative; }
+.hbar .track i { position:absolute; left:0; top:0; bottom:0; background:var(--primary); border-radius:3px; }
+.hbar .v { text-align:right; font-variant-numeric: tabular-nums; color:var(--muted); }
+.why { font-size:.8rem; color:var(--muted); margin-top:.2rem; }
 .prose { max-width: 36rem; }
 .prose p, .prose li { color:var(--muted); }
 .prose h3 { font-size:1.05rem; margin:1.5rem 0 .4rem; }
@@ -165,7 +178,9 @@ const dayName = (s) => parseLocal(s).toLocaleDateString("en-GB", { weekday: "lon
 const shortDay = (s) => parseLocal(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 const hhmm = (s) => s.slice(11, 16);
 
-const TABS = [["fixtures", "This round"], ["books", "Bookmakers"], ["ratings", "Ratings"], ["record", "Record"], ["about", "About"]];
+const TABS = [["fixtures", "This round"], ["moves", "Market moves"], ["books", "Bookmakers"], ["ratings", "Ratings"], ["record", "Record"], ["about", "About"]];
+const utcDay = (z) => (z ? new Date(z.replace("Z", ":00Z")).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }) : "");
+const utcTime = (z) => { if (!z) return ""; const d = new Date(z.replace("Z", ":00Z")); return d.toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }); };
 function tab() { const h = location.hash.slice(1); return TABS.some(([k]) => k === h) ? h : "fixtures"; }
 function renderTabs() {
   $("#tabs").innerHTML = TABS.map(([k, l]) => `<button role="tab" aria-selected="${k === tab()}" data-tab="${k}">${l}</button>`).join("");
@@ -205,7 +220,7 @@ function compareTable(f) {
 function booksTable(f) {
   if (!f.books || !f.books.length) return "";
   const best = f.books.filter((b) => !b.exchange).sort((a, b) => b.payout - a.payout)[0];
-  const rows = f.books.map((b) => `<tr class="${b.exchange ? "exch" : ""}"><td>${esc(b.name)}${b.exchange ? "<small>exchange, before commission</small>" : b.source === "live" ? "<small>live</small>" : ""}</td>
+  const rows = f.books.map((b) => `<tr class="${b.exchange ? "exch" : ""}"><td>${esc(b.name)}${b.exchange ? "<small>exchange, before commission</small>" : b.source === "live" ? `<small>live${b.seen ? ", " + esc(utcTime(b.seen)) : ""}</small>` : ""}</td>
     ${b.odds.map((x, k) => `<td class="${b.best[k] ? "best" : ""}">${x.toFixed(2)}</td>`).join("")}<td>${pc(b.payout, 1)}</td></tr>`).join("");
   return `<div><div class="diff" style="margin-bottom:.35rem">Every bookmaker's odds. Green is the best price for that result; payout is the share of stakes a bookmaker pays back on average.</div>
     <div class="cs-scroll"><table class="cmp"><thead><tr><th>Bookmaker</th><th>${esc(f.home)}</th><th>Draw</th><th>${esc(f.away)}</th><th>Payout</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -215,7 +230,7 @@ function valueBox(f) {
   if (!f.value || !f.value.length) return "";
   return f.value.map((v) => `<div class="valbox"><h4>Value: ${esc(outcomeName(f, v.outcome))} at ${v.price.toFixed(2)}</h4>
     <p>Offered by <strong>${esc(v.books.join(", "))}</strong>. The exchange's fair price is ${v.fair_odds.toFixed(2)}, so this price is worth <strong>${(v.ev * 100).toFixed(1)}%</strong> more than a fair bet.</p>
-    <p>Quarter-Kelly stake: ${(v.quarter_kelly * 100).toFixed(1)}% of your betting bank. EdgeLab model gives this ${pc(v.p_model)} against the exchange's ${pc(v.p_sharp)}.</p></div>`).join("");
+    <p>Quarter-Kelly stake: ${(v.quarter_kelly * 100).toFixed(1)}% of your betting bank. EdgeLab model gives this ${pc(v.p_model)} against the exchange's ${pc(v.p_sharp)}.</p>${v.why ? `<p>${esc(v.why)}</p>` : ""}</div>`).join("");
 }
 function cellText(v, mode) {
   if (mode === "odds") { const o = 1 / v; return o >= 1000 ? "1000+" : o >= 100 ? o.toFixed(0) : o >= 10 ? o.toFixed(1) : o.toFixed(2); }
@@ -249,7 +264,7 @@ function viewFixtures() {
   let valueHtml = "";
   if (vals.length) {
     valueHtml = `<h3 class="day" style="margin-top:0">Value bets this round</h3><div class="vlist">${vals.map(({ f, v }) => `<div class="vrow"><span>${esc(outcomeName(f, v.outcome))} <span class="diff">(${esc(f.home)} v ${esc(f.away)})</span></span><span class="ev">+${(v.ev * 100).toFixed(1)}%</span>
-      <span class="meta num">${esc(shortDay(f.date))} ${hhmm(f.date)}. ${v.price.toFixed(2)} with ${esc(v.books.join(", "))}; exchange fair price ${v.fair_odds.toFixed(2)}. Quarter-Kelly ${(v.quarter_kelly * 100).toFixed(1)}% of bank.</span></div>`).join("")}</div>`;
+      <span class="meta num">${esc(shortDay(f.date))} ${hhmm(f.date)}. ${v.price.toFixed(2)} with ${esc(v.books.join(", "))}; exchange fair price ${v.fair_odds.toFixed(2)}. Quarter-Kelly ${(v.quarter_kelly * 100).toFixed(1)}% of bank.${v.why ? `<span class="why">${esc(v.why)}</span>` : ""}</span></div>`).join("")}</div>`;
   } else if (anySharp) {
     valueHtml = `<p class="note"><strong>No value bets this round.</strong> No bookmaker's price beats the betting exchange's fair price by ${(DATA.value_threshold * 100).toFixed(0)}% or more. Most weeks have a few; this one has none.</p>`;
   }
@@ -373,6 +388,75 @@ function valueRecord() {
       <span class="meta num">${esc(shortDay(b.date))}. ${b.price.toFixed(2)} with ${esc(b.books)}, +${(b.ev * 100).toFixed(1)}% at the time${b.clv != null ? `; ${b.clv >= 0 ? "beat" : "missed"} the closing price by ${Math.abs(b.clv * 100).toFixed(1)}%` : ""}.</span></div>`).join("")}</div>`;
 }
 
+
+function spark(series) {
+  if (!series || series.length < 2) return "";
+  const W = 300, H = 64, pad = 4;
+  const ts = series.map((r) => parseLocal(r[0]).getTime());
+  const t0 = ts[0], t1 = ts[ts.length - 1] || t0 + 1;
+  const vals = series.flatMap((r) => r.slice(1));
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi - lo < 0.1) { const m = (hi + lo) / 2; lo = m - 0.05; hi = m + 0.05; }
+  const x = (t) => pad + ((t - t0) / Math.max(1, t1 - t0)) * (W - 2 * pad);
+  const y = (v) => H - pad - ((v - lo) / (hi - lo)) * (H - 2 * pad);
+  const line = (k, col) => `<polyline fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" points="${series.map((r, i) => `${x(ts[i]).toFixed(1)},${y(r[k + 1]).toFixed(1)}`).join(" ")}"/>`;
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${line(1, "var(--draw)")}${line(2, "var(--away)")}${line(0, "var(--home)")}</svg>`;
+}
+function moveCell(m, k, label) {
+  const d = (m.now[k] - m.open[k]) * 100;
+  return `<div>${label}<b>${pc(m.open[k])} → ${pc(m.now[k])}</b>${d > 0 ? "+" : ""}${d.toFixed(1)} pts · ${odds(m.now[k])}</div>`;
+}
+function moveCard(m) {
+  const names = [m.home, "Draw", m.away];
+  const first = m.series.length ? m.series[0][0] : null;
+  const lag = m.lagging && m.lagging.length ? `<div class="lagbox"><strong>Slow to follow the ${(m.d12[m.k12] * 100).toFixed(1)}-point move on ${esc(m.k12 === 1 ? "the draw" : names[m.k12] + " to win")}:</strong> ${m.lagging.slice(0, 4).map((x) => `${esc(x.book)} ${x.price.toFixed(2)} (was ${x.was.toFixed(2)}${x.ev > 0 ? `, <span class="better">+${(x.ev * 100).toFixed(1)}%</span> against the sharp price` : ""})`).join("; ")}.</div>` : "";
+  return `<div class="mcard"><div class="teams"><span>${esc(m.home)}</span><span class="t">${esc(shortDay(m.date))} ${hhmm(m.date)}</span><span class="a">${esc(m.away)}</span></div>
+    ${spark(m.series)}
+    <div class="hint num"><span>${first ? esc(shortDay(first)) + " " + hhmm(first) : ""}</span><span>${m.n} snapshots</span><span>now</span></div>
+    <div class="mrow" style="margin-top:.35rem">${moveCell(m, 0, "Home")}${moveCell(m, 1, "Draw")}${moveCell(m, 2, "Away")}</div>${lag}</div>`;
+}
+function lagTable(rows) {
+  const pct = (x) => (x == null ? "–" : pc(Math.max(0, Math.min(1, x))));
+  const cu = (r) => r.catchup_h == null ? (r.never_inf ? "rarely" : "–") : r.catchup_h <= 0.1 ? "at once" : r.catchup_h < 1 ? `${Math.round(r.catchup_h * 60)} min` : `${r.catchup_h.toFixed(1)} h`;
+  return `<div class="cs-scroll"><table class="cmp"><thead><tr><th>Bookmaker</th><th>Moves</th><th>Copied</th><th>Half-way</th><th>Value after</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr><td>${esc(r.name)}<small>checked every ~${r.gap_h != null ? (r.gap_h < 1.5 ? r.gap_h.toFixed(1) : Math.round(r.gap_h)) : "?"} h</small></td><td>${r.moves}</td>
+      <td class="${r.follow != null && r.follow < 0.5 ? "best" : ""}">${pct(r.follow)}${r.follow_ci != null ? `<small>±${pc(r.follow_ci)}</small>` : ""}</td><td>${cu(r)}</td>
+      <td>${r.value_after_move != null ? pc(r.value_after_move) : "–"}</td></tr>`).join("")}</tbody></table></div>`;
+}
+function viewMoves() {
+  const mv = DATA.moves;
+  if (!mv || !mv.fetches) return `<h2>Market moves</h2><p class="empty">Price snapshots start with the next update. Each one saves every bookmaker's odds so we can see how prices move and who is slow to follow.</p>`;
+  const pl = mv.plan || {};
+  const minEv = 8;
+  const fast = mv.books.filter((b) => b.moves >= minEv && (b.gap_h ?? 99) <= 4);
+  const slowChecked = mv.books.filter((b) => b.moves >= minEv && (b.gap_h ?? 99) > 4);
+  const collecting = mv.books.filter((b) => b.moves < minEv).length;
+  const lagNow = mv.matches.filter((m) => m.lagging && m.lagging.length);
+  const tmax = Math.max(0.001, ...mv.timing.map((t) => t.move || 0));
+  return `<h2>Market moves</h2>
+    <p class="lede">Every bookmaker's price, saved several times a day. When Pinnacle and the betting exchange move, some bookmakers take hours to follow. A slow bookmaker still offering the old price is the most reliable source of value.</p>
+    <p class="note"><strong>${mv.fetches} snapshots</strong> since ${esc(utcDay(mv.first))}, the latest ${esc(utcTime(mv.last))} (UK time). ${pl.remaining != null ? `${pl.remaining} credits left until ${esc(new Date(pl.reset.replace("Z", ":00Z")).toLocaleDateString("en-GB", { day: "numeric", month: "short" }))}. ` : ""}Snapshots now run about every ${pl.gap_h != null ? (pl.gap_h < 3 ? pl.gap_h.toFixed(1) : Math.round(pl.gap_h)) : "few"} hours, with every bookmaker covered every 12 hours, and three more before each kick-off (90, 35 and 12 minutes before, so the line-up move and the closing price are caught).</p>
+    <h3 class="day">This round: how the sharp price has moved</h3>
+    <div class="legend"><span><i style="background:var(--home)"></i>Home win</span><span><i style="background:var(--draw)"></i>Draw</span><span><i style="background:var(--away)"></i>Away win</span></div>
+    ${lagNow.length ? `<p class="diff"><strong>${lagNow.length} match${lagNow.length > 1 ? "es have" : " has"} a bookmaker lagging behind a recent move.</strong> Check its price before it is cut.</p>` : ""}
+    ${mv.matches.length ? [...lagNow, ...mv.matches.filter((m) => !lagNow.includes(m))].map(moveCard).join("") : `<p class="diff">No upcoming matches in the snapshots yet.</p>`}
+    <p class="diff cs-note">Lines show the chance of each result from Pinnacle and the betting exchange (margin removed), from the first snapshot to now. Matches with the biggest moves come first.</p>
+    <h3 class="day">Slow and fast bookmakers</h3>
+    ${fast.length || slowChecked.length ? `${fast.length ? lagTable(fast) : ""}${slowChecked.length ? `<p class="diff" style="margin:.8rem 0 .35rem">Checked only in the 12-hourly full snapshots, so "next check" means up to 12 hours later:</p>${lagTable(slowChecked)}` : ""}
+      <p class="diff cs-note"><strong>Moves</strong>: times the sharp chance of a result changed by ${(mv.move_min * 100).toFixed(1)} points or more between two checks of this bookmaker. <strong>Copied</strong>: how much of that move the bookmaker had copied by the same check (green: less than half, a slow bookmaker). <strong>Half-way</strong>: typical time until it had copied half, using the time each price last changed ("at once" means within the same check). <strong>Value after</strong>: how often its price was then ${(DATA.value_threshold * 100).toFixed(0)}% or more above the sharp fair price.${collecting ? ` ${collecting} more bookmaker${collecting > 1 ? "s need" : " needs"} more moves before ranking.` : ""}</p>`
+      : `<p class="diff">Collecting data: ${mv.events} sharp moves recorded so far. The ranking appears once each bookmaker has been seen through at least ${minEv} moves, usually within a week.</p>`}
+    <h3 class="day">When prices move</h3>
+    ${mv.closed ? mv.timing.map((t) => `<div class="hbar"><span>${esc(t.label)}</span><span class="track"><i style="width:${((t.move || 0) / tmax) * 100}%"></i></span><span class="v">${t.move != null ? (t.move * 100).toFixed(1) + " pts" : "–"}</span></div>`).join("")
+      + `<p class="diff cs-note">Average size of the sharp price's move in each period, over ${mv.closed} finished matches with a closing snapshot. Big early moves mean early information; a big last hour means line-ups matter.</p>`
+      : `<p class="diff">Appears once matches with a full set of snapshots have kicked off.</p>`}
+    <h3 class="day">When is the best time to bet?</h3>
+    ${mv.clv_time.some((r) => r.n) ? `<div class="cs-scroll"><table class="cmp"><thead><tr><th>Before kick-off</th><th>Best price</th><th>Value bets</th><th>Their CLV</th></tr></thead><tbody>
+      ${mv.clv_time.map((r) => `<tr><td>${esc(r.label)}<small>${r.n} matches</small></td><td>${r.best != null ? `<span class="${r.best >= 0 ? "better" : "worse"}">${r.best >= 0 ? "+" : ""}${(r.best * 100).toFixed(1)}%</span>${r.best_ci != null ? `<small>±${(r.best_ci * 100).toFixed(1)}%</small>` : ""}` : "–"}</td>
+        <td>${r.value_n ?? 0}</td><td>${r.value_clv != null ? `<span class="${r.value_clv >= 0 ? "better" : "worse"}">${r.value_clv >= 0 ? "+" : ""}${(r.value_clv * 100).toFixed(1)}%</span>${r.value_ci != null ? `<small>±${(r.value_ci * 100).toFixed(1)}%</small>` : ""}` : "–"}</td></tr>`).join("")}</tbody></table></div>
+      <p class="diff cs-note">Each price is scored against the sharp closing price (closing line value, CLV): positive means it beat the market's final view. <strong>Best price</strong> takes the highest bookmaker price at that time, averaged over home, draw and away. <strong>Value bets</strong> are prices that were ${(DATA.value_threshold * 100).toFixed(0)}%+ above the sharp price at the time. The ± range is a 90% interval; with few matches it is wide.</p>`
+      : `<p class="diff">Appears once matches with snapshots before and at kick-off have been played.</p>`}`;
+}
+
 function viewAbout() {
   const m = DATA.model;
   return `<div class="prose"><h2>How it works</h2>
@@ -385,12 +469,12 @@ function viewAbout() {
     <h3>Finding value</h3>
     <p>Value bets on this site come from comparing prices, not from the model. The Betfair Exchange (and Pinnacle, when available) prices each match with almost no margin, so its odds are the fairest estimate of the true chances. Now and then an ordinary bookmaker offers better odds than that fair price. When one beats it by ${(DATA.value_threshold * 100).toFixed(0)}% or more, it is listed as a value bet.</p>
     <p>Tested on the same 810 matches, this rule found 120 bets. On average they got prices 4.8% better than the exchange's closing price (range 3.1% to 6.5%), and they did so in every season tested. Profit was +18.7% but over so few bets that luck dominates (range −10% to +49%). Prices move quickly, the best price is not always with a bookmaker you can use, and bookmakers limit accounts that win, so treat this as a strong lead, not a guarantee. Every value bet is logged on the Record tab before kick-off so the rule can be checked in the open.</p>
-    ${DATA.odds_api_credits != null ? `<p class="diff">Live odds feed: ${esc(DATA.odds_api_credits)} free API credits left this month (each update uses 2).</p>` : ""}
+    ${DATA.odds_api_credits != null ? `<p class="diff">Live odds feed: ${esc(DATA.odds_api_credits)} free API credits left this month. A full snapshot of every bookmaker uses 2; a quick one of ten key bookmakers uses 1. See Market moves for the schedule.</p>` : ""}
     <h3>Betting</h3>
     <p>If you bet, only bet what you can afford to lose. You must be 18 or over. Free, confidential help is available from <a href="https://www.begambleaware.org" rel="noopener">BeGambleAware</a>.</p></div>`;
 }
 
-const VIEWS = { fixtures: viewFixtures, books: viewBooks, ratings: viewRatings, record: viewRecord, about: viewAbout };
+const VIEWS = { fixtures: viewFixtures, moves: viewMoves, books: viewBooks, ratings: viewRatings, record: viewRecord, about: viewAbout };
 function render() {
   renderTabs(); $("#main").innerHTML = VIEWS[tab()]();
   document.querySelectorAll("[data-win]").forEach((b) => (b.onclick = () => { boardWin = b.dataset.win; render(); }));

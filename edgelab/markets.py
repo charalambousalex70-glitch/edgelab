@@ -77,23 +77,6 @@ def map_team(name: str, known: set[str]) -> str | None:
 CREDITS = {"remaining": None, "used": None}
 
 
-def fetch_odds_api(key: str, cache: Path, regions=("uk", "eu")) -> list:
-    import requests
-
-    events = []
-    for region in regions:
-        r = requests.get("https://api.the-odds-api.com/v4/sports/soccer_epl/odds/",
-                         params={"apiKey": key, "regions": region, "markets": "h2h", "oddsFormat": "decimal"},
-                         timeout=60)
-        r.raise_for_status()
-        print(f"The Odds API {region}: {len(r.json())} events, credits left {r.headers.get('x-requests-remaining')}")
-        CREDITS["remaining"] = r.headers.get("x-requests-remaining")
-        CREDITS["used"] = r.headers.get("x-requests-used")
-        events.extend(r.json())
-    cache.write_text(json.dumps(events))
-    return events
-
-
 def parse_odds_api(events: list, known: set[str]) -> dict:
     """{(home, away): {book_key: {"title": str, "odds": [h, d, a]}}} with football-data team names."""
     out: dict = {}
@@ -138,8 +121,13 @@ def load_opta(path: Path) -> dict:
 
 # ------------------------------------------------------------------ per-fixture view
 def fixture_markets(row: pd.Series, api_books: dict | None, model_p: list, opta_p: list | None,
-                    threshold: float) -> dict:
-    """Every source's probabilities for one fixture, the sharp consensus, and value bets."""
+                    threshold: float, max_stale_h: float = 3) -> dict:
+    """Every source's probabilities for one fixture, the sharp consensus, and value bets.
+
+    A live bookmaker price only counts towards the best price when it was seen within
+    `max_stale_h` hours of the newest sharp price (focus snapshots refresh only ten
+    bookmakers, so the others' prices can be hours old). A Friday football-data price is
+    ignored for a bookmaker that also has a live price."""
     sources = []  # (label, probabilities, odds, kind)
 
     def fd(prefix):
@@ -174,12 +162,17 @@ def fixture_markets(row: pd.Series, api_books: dict | None, model_p: list, opta_
 
     # Best bettable price per outcome: football-data books and The Odds API bookmakers.
     offers = []  # (outcome index, price, bookmaker)
+    live_names = {book_key(b["title"]) for b in api_books.values()}
     for prefix, name in FD_BOOKS.items():
+        if book_key(name) in live_names:
+            continue
         for k, x in enumerate(fd(prefix)):
             if isinstance(x, (int, float)) and np.isfinite(x) and x > 1:
                 offers.append((k, float(x), name))
     for key, b in api_books.items():
         if key in ODDS_API_SHARP or key in ODDS_API_EXCLUDE or key.startswith("betfair_ex"):
+            continue
+        if b.get("stale_h", 0) > max_stale_h:
             continue
         for k, x in enumerate(b["odds"]):
             offers.append((k, float(x), b["title"]))
@@ -237,7 +230,7 @@ def fixture_books(row: pd.Series, api_books: dict | None) -> list:
     for key, b in (api_books or {}).items():
         name = b["title"]
         if margin(b["odds"]) is not None:
-            books[book_key(name)] = {"name": name, "odds": b["odds"], "source": "live"}
+            books[book_key(name)] = {"name": name, "odds": b["odds"], "source": "live", "seen": b.get("fetched")}
     out = []
     for b in books.values():
         mg = margin(b["odds"])
