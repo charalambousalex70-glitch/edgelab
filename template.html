@@ -385,6 +385,7 @@ function viewAbout() {
     <h3>Finding value</h3>
     <p>Value bets on this site come from comparing prices, not from the model. The Betfair Exchange (and Pinnacle, when available) prices each match with almost no margin, so its odds are the fairest estimate of the true chances. Now and then an ordinary bookmaker offers better odds than that fair price. When one beats it by ${(DATA.value_threshold * 100).toFixed(0)}% or more, it is listed as a value bet.</p>
     <p>Tested on the same 810 matches, this rule found 120 bets. On average they got prices 4.8% better than the exchange's closing price (range 3.1% to 6.5%), and they did so in every season tested. Profit was +18.7% but over so few bets that luck dominates (range −10% to +49%). Prices move quickly, the best price is not always with a bookmaker you can use, and bookmakers limit accounts that win, so treat this as a strong lead, not a guarantee. Every value bet is logged on the Record tab before kick-off so the rule can be checked in the open.</p>
+    ${DATA.odds_api_credits != null ? `<p class="diff">Live odds feed: ${esc(DATA.odds_api_credits)} free API credits left this month (each update uses 2).</p>` : ""}
     <h3>Betting</h3>
     <p>If you bet, only bet what you can afford to lose. You must be 18 or over. Free, confidential help is available from <a href="https://www.begambleaware.org" rel="noopener">BeGambleAware</a>.</p></div>`;
 }

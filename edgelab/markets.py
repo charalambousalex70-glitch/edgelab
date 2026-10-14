@@ -74,6 +74,9 @@ def map_team(name: str, known: set[str]) -> str | None:
 
 
 # ------------------------------------------------------------------ The Odds API
+CREDITS = {"remaining": None, "used": None}
+
+
 def fetch_odds_api(key: str, cache: Path) -> list:
     import requests
 
@@ -84,6 +87,8 @@ def fetch_odds_api(key: str, cache: Path) -> list:
                          timeout=60)
         r.raise_for_status()
         print(f"The Odds API {region}: {len(r.json())} events, credits left {r.headers.get('x-requests-remaining')}")
+        CREDITS["remaining"] = r.headers.get("x-requests-remaining")
+        CREDITS["used"] = r.headers.get("x-requests-used")
         events.extend(r.json())
     cache.write_text(json.dumps(events))
     return events

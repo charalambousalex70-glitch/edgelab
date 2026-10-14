@@ -249,7 +249,7 @@ def build(cfg, now: pd.Timestamp) -> dict:
                   "promoted_prior": [r4(np.exp(prior[0])), r4(np.exp(prior[1]))]},
         "fixtures": fixtures, "ratings": ratings, "record": record, "live": live, "value": value,
         "board": board,
-        "value_threshold": threshold, "odds_api": bool(api_books),
+        "value_threshold": threshold, "odds_api": bool(api_books), "odds_api_credits": mk.CREDITS["remaining"],
         "backtest": cfg.get("backtest"),
     }
 
