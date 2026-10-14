@@ -27,6 +27,7 @@ ROOT = Path(__file__).parent
 DATA, PUBLIC, HISTORY = ROOT / "data", ROOT / "public", ROOT / "history" / "predictions.csv"
 VALUE_LOG = ROOT / "history" / "value_bets.csv"
 ODDS_LOG = ROOT / "history" / "odds_log.csv"
+CFG: dict = {}
 OPTA = ROOT / "opta.csv"
 # Every odds column we keep: pre-match prices, and closing prices ("C") for settling value bets.
 ODDS_PREFIXES = list(mk.FD_BOOKS) + list(mk.FD_SHARP) + list(mk.FD_OTHER)
@@ -382,7 +383,7 @@ def load_odds_api() -> list | None:
 
     if key:
         try:
-            events = mk.fetch_odds_api(key, cache)
+            events = mk.fetch_odds_api(key, cache, CFG.get("odds_api_regions", ["uk", "eu"]))
             note(f"ok, {len(events)} events across uk+eu, credits left {mk.CREDITS['remaining']}")
             return events
         except Exception as exc:  # never let the optional feed break the site
@@ -571,6 +572,7 @@ def main() -> None:
     ap.add_argument("--now", help="pretend the current time is this (YYYY-MM-DD HH:MM)")
     args = ap.parse_args()
     cfg = json.loads((ROOT / "config.json").read_text())
+    CFG.update(cfg)
     now = pd.Timestamp(args.now) if args.now else pd.Timestamp(datetime.now(timezone.utc).replace(tzinfo=None))
     if args.local:
         DATA.mkdir(exist_ok=True)

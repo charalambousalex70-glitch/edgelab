@@ -50,5 +50,9 @@
       ]
     }
   ],
-  "value_threshold": 0.02
+  "value_threshold": 0.02,
+  "odds_api_regions": [
+    "uk",
+    "eu"
+  ]
 }

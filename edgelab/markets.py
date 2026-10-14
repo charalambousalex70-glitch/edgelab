@@ -77,11 +77,11 @@ def map_team(name: str, known: set[str]) -> str | None:
 CREDITS = {"remaining": None, "used": None}
 
 
-def fetch_odds_api(key: str, cache: Path) -> list:
+def fetch_odds_api(key: str, cache: Path, regions=("uk", "eu")) -> list:
     import requests
 
     events = []
-    for region in ("uk", "eu"):
+    for region in regions:
         r = requests.get("https://api.the-odds-api.com/v4/sports/soccer_epl/odds/",
                          params={"apiKey": key, "regions": region, "markets": "h2h", "oddsFormat": "decimal"},
                          timeout=60)
