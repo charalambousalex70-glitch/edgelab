@@ -35,7 +35,7 @@ jobs:
       - run: python -m pytest -q tests
       - run: python build.py
         env:
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY || vars.ODDS_API_KEY }}
       - name: Save the prediction history
         run: |
           git config user.name "edgelab-bot"
