@@ -10,3 +10,4 @@ logged_at,date,home,away,outcome,price,books,p_sharp,ev,p_model,why
 2026-10-15 14:35,2026-10-24T15:00,Arsenal,Everton,draw,4.93,1xBet,0.2085,0.0279,0.2539,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
 2026-10-16 09:43,2026-10-17T15:00,Brentford,Liverpool,draw,3.85,Unibet (NL),0.266,0.0242,0.2585,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
 2026-10-16 09:43,2026-10-19T20:00,Tottenham,Coventry,away,7.0,Bet365,0.1483,0.0384,0.1831,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
+2026-10-16 21:25,2026-10-24T15:00,Arsenal,Everton,away,8.5,Betfred (UK) / BoyleSports / Paddy Power,0.1701,0.4457,0.1153,The sharp price for this result has shortened by 6.6 points in the last 12 hours; Betfred (UK) has not followed (still 1.40). Slow prices like this tend to be cut soon.
