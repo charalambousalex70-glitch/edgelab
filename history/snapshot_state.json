@@ -1,6 +1,6 @@
 {
- "last_build": "2026-10-17T23:06Z",
- "remaining": 469,
+ "last_build": "2026-10-18T09:31Z",
+ "remaining": 467,
  "fetches": [
   {
    "at": "2026-10-14T10:20Z",
@@ -148,6 +148,13 @@
    "cost": 1,
    "remaining": 469,
    "rows": 204
+  },
+  {
+   "at": "2026-10-18T09:31Z",
+   "mode": "full",
+   "cost": 2,
+   "remaining": 467,
+   "rows": 753
   }
  ],
  "milestones_done": [
