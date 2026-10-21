@@ -26,3 +26,5 @@ logged_at,date,home,away,outcome,price,books,p_sharp,ev,p_model,why
 2026-10-20 15:00,2026-10-24T15:00,Coventry,Fulham,draw,3.7,Unibet (NL) / Unibet (SE),0.2757,0.0202,0.2797,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
 2026-10-21 10:04,2026-10-24T17:30,Chelsea,Tottenham,draw,4.65,Nordic Bet,0.2202,0.0237,0.2251,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
 2026-10-21 15:12,2026-10-31T15:00,Bournemouth,Leeds,draw,3.75,Betfred (UK),0.2787,0.045,0.281,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
+2026-10-21 22:42,2026-10-25T14:00,Man United,Bournemouth,away,3.9,1xBet,0.2688,0.0484,0.2909,The sharp price for this result has shortened by 2.4 points in the last 12 hours; 1xBet has only partly followed (1.91 to 1.99). Slow prices like this tend to be cut soon.
+2026-10-21 22:42,2026-10-31T15:00,Coventry,Sunderland,home,2.96,1xBet,0.3447,0.0204,0.2617,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
