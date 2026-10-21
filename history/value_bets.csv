@@ -25,3 +25,4 @@ logged_at,date,home,away,outcome,price,books,p_sharp,ev,p_model,why
 2026-10-19 17:13,2026-10-19T20:00,Tottenham,Coventry,draw,4.75,Bet&Win,0.2149,0.0207,0.2501,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
 2026-10-20 15:00,2026-10-24T15:00,Coventry,Fulham,draw,3.7,Unibet (NL) / Unibet (SE),0.2757,0.0202,0.2797,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
 2026-10-21 10:04,2026-10-24T17:30,Chelsea,Tottenham,draw,4.65,Nordic Bet,0.2202,0.0237,0.2251,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
+2026-10-21 15:12,2026-10-31T15:00,Bournemouth,Leeds,draw,3.75,Betfred (UK),0.2787,0.045,0.281,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
