@@ -33,3 +33,4 @@ logged_at,date,home,away,outcome,price,books,p_sharp,ev,p_model,why
 2026-10-23 09:59,2026-10-24T12:30,Aston Villa,Man City,draw,4.7,Unibet (NL) / Unibet (SE),0.2173,0.0212,0.2487,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
 2026-10-23 09:59,2026-10-24T17:30,Chelsea,Tottenham,away,4.62,Coolbet,0.2216,0.0236,0.2132,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
 2026-10-23 09:59,2026-11-01T16:30,Liverpool,Arsenal,home,3.33,1xBet,0.3072,0.023,0.2589,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
+2026-10-23 15:00,2026-10-25T16:30,Sunderland,Leeds,home,3.2,Best market price,0.3243,0.0377,0.3116,The sharp price for this result has shortened by 2.4 points in the last 12 hours.
