@@ -36,3 +36,5 @@ logged_at,date,home,away,outcome,price,books,p_sharp,ev,p_model,why
 2026-10-23 15:00,2026-10-25T16:30,Sunderland,Leeds,home,3.2,Best market price,0.3243,0.0377,0.3116,The sharp price for this result has shortened by 2.4 points in the last 12 hours.
 2026-10-24 13:34,2026-10-24T15:00,Arsenal,Everton,home,1.45,Best market price,0.7038,0.0205,0.6418,The sharp price for this result has shortened by 4.9 points in the last 12 hours.
 2026-10-24 16:57,2026-11-02T20:00,Newcastle,Everton,away,3.23,1xBet,0.317,0.0238,0.2757,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
+2026-10-24 19:28,2026-10-31T12:30,Chelsea,Man United,draw,4.25,Unibet (NL) / Unibet (SE),0.2543,0.0808,0.2456,The sharp price for this result has shortened by 2.4 points in the last 12 hours; Unibet (NL) has not followed (still 1.87). Slow prices like this tend to be cut soon.
+2026-10-24 19:28,2026-10-31T12:30,Chelsea,Man United,away,4.08,1xBet,0.2707,0.1044,0.2939,The sharp price for this result has shortened by 3.0 points in the last 12 hours; 1xBet has not followed (still 1.90). Slow prices like this tend to be cut soon.
