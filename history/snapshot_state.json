@@ -1,6 +1,6 @@
 {
- "last_build": "2026-10-24T09:28Z",
- "remaining": 428,
+ "last_build": "2026-10-24T13:34Z",
+ "remaining": 427,
  "fetches": [
   {
    "at": "2026-10-14T10:20Z",
@@ -365,9 +365,19 @@
    "cost": 1,
    "remaining": 428,
    "rows": 184
+  },
+  {
+   "at": "2026-10-24T13:34Z",
+   "mode": "focus",
+   "cost": 1,
+   "remaining": 427,
+   "rows": 180
   }
  ],
- "milestones_done": [],
+ "milestones_done": [
+  "2026-10-24T14:00Z|35",
+  "2026-10-24T14:00Z|90"
+ ],
  "book_keys": {
   "1xBet": "onexbet",
   "888sport": "sport888",
