@@ -1,6 +1,6 @@
 {
- "last_build": "2026-10-24T19:28Z",
- "remaining": 424,
+ "last_build": "2026-10-24T21:51Z",
+ "remaining": 423,
  "fetches": [
   {
    "at": "2026-10-14T10:20Z",
@@ -386,6 +386,13 @@
    "cost": 1,
    "remaining": 424,
    "rows": 203
+  },
+  {
+   "at": "2026-10-24T21:51Z",
+   "mode": "focus",
+   "cost": 1,
+   "remaining": 423,
+   "rows": 179
   }
  ],
  "milestones_done": [
@@ -437,7 +444,6 @@
   "Winamax (FR)": "winamax_fr"
  },
  "kickoffs": [
-  "2026-10-24T16:30Z",
   "2026-10-25T14:00Z",
   "2026-10-25T16:30Z",
   "2026-10-31T12:30Z",
