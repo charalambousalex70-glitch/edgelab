@@ -46,3 +46,6 @@ logged_at,date,home,away,outcome,price,books,p_sharp,ev,p_model,why
 2026-10-25 22:31,2026-10-31T20:00,Aston Villa,Fulham,away,3.94,1xBet,0.2601,0.0247,0.2505,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
 2026-10-26 11:00,2026-10-31T20:00,Aston Villa,Fulham,draw,3.95,Unibet (NL) / Unibet (SE),0.2606,0.0294,0.2717,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
 2026-10-26 21:43,2026-10-31T15:00,Hull,Ipswich,draw,3.6,Betfred (UK),0.2834,0.0202,0.267,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
+2026-10-28 11:17,2026-10-31T15:00,Brentford,Nott'm Forest,draw,4.0,Unibet (NL) / Unibet (SE),0.2568,0.027,0.2729,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
+2026-10-28 11:17,2026-10-31T15:00,Brentford,Nott'm Forest,away,3.75,Unibet (NL) / Unibet (SE),0.2741,0.0278,0.2618,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
+2026-10-28 11:17,2026-10-31T15:00,Man City,Brighton,away,5.03,1xBet,0.2033,0.0225,0.1925,"The exchange price has been steady over the last 12 hours, so this is a soft price rather than a slow one."
