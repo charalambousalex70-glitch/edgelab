@@ -1,1 +1,1 @@
-2026-10-29 11:29 UTC: ok, focus snapshot: 10 bookmakers on 21 matches, cost 1, credits left 399
+2026-10-29 17:32 UTC: ok, full snapshot: 42 bookmakers on 21 matches, cost 2, credits left 397
